@@ -1,0 +1,49 @@
+<Window x:Class="Effortless.Views.TimerWidget"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Effortless Timer"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ResizeMode="NoResize"
+        SizeToContent="WidthAndHeight"
+        MouseLeftButtonDown="Window_MouseLeftButtonDown">
+
+    <Border Background="#1a1a1a"
+            CornerRadius="6"
+            Padding="12,6"
+            BorderBrush="#333333"
+            BorderThickness="1">
+        <StackPanel Orientation="Horizontal">
+            <!-- Task name -->
+            <TextBlock Text="{Binding TaskName}"
+                       Foreground="#ffffff"
+                       FontFamily="Segoe UI"
+                       FontSize="13"
+                       FontWeight="SemiBold"
+                       VerticalAlignment="Center"
+                       MaxWidth="200"
+                       TextTrimming="CharacterEllipsis"/>
+
+            <!-- Timer -->
+            <TextBlock Text="{Binding TimerDisplay}"
+                       Foreground="#6495ED"
+                       FontFamily="Consolas"
+                       FontSize="13"
+                       FontWeight="Bold"
+                       VerticalAlignment="Center"
+                       Margin="8,0,0,0"
+                       Visibility="{Binding TimerVisibility}"/>
+
+            <!-- Pause indicator -->
+            <TextBlock Text="⏸"
+                       Foreground="#888888"
+                       FontSize="11"
+                       VerticalAlignment="Center"
+                       Margin="4,0,0,0"
+                       Visibility="{Binding PauseVisibility}"/>
+        </StackPanel>
+    </Border>
+</Window>
