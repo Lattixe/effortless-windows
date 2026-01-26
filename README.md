@@ -64,26 +64,36 @@ A minimalist task timer for Windows. Focus on what matters.
 
 ## Installation
 
-### Requirements
-- Windows 10/11
-- [.NET 8 Runtime](https://dotnet.microsoft.com/download/dotnet/8.0)
+### Quick Install (Recommended)
+
+1. Clone or download this repo
+2. Run the install script:
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File install.ps1
+   ```
+
+This will:
+- Install Effortless to `%LOCALAPPDATA%\Effortless`
+- Add "Effortless" to your Start Menu (searchable)
+- Set Effortless to run automatically on Windows startup
+- Launch the app immediately
+
+### Uninstall
+
+```powershell
+powershell -ExecutionPolicy Bypass -File uninstall.ps1
+```
+
+Your tasks and notes are preserved after uninstall.
 
 ### Build from Source
 
 ```bash
 git clone https://github.com/Lattixe/effortless-windows.git
 cd effortless-windows
-dotnet build
-dotnet run
+dotnet publish -c Release -r win-x64 --self-contained -o publish
+powershell -ExecutionPolicy Bypass -File install.ps1
 ```
-
-### Run Release Build
-
-```bash
-dotnet publish -c Release -r win-x64 --self-contained
-```
-
-The executable will be in `bin/Release/net8.0-windows/win-x64/publish/`
 
 ## Data Storage
 

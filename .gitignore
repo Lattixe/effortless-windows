@@ -41,3 +41,6 @@ Desktop.ini
 # Claude temp files
 tmpclaude-*
 .claude/
+
+# Publish output
+publish/
