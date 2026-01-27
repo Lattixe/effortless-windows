@@ -40,10 +40,16 @@ public partial class App : System.Windows.Application
         // Create scratch pad window (hidden initially)
         _scratchPadWindow = new ScratchPadWindow();
 
-        // Create timer widget (always visible)
+        // Create timer widget (visible only when there are tasks)
         _timerWidget = new TimerWidget(_viewModel);
         _timerWidget.DoubleClicked += (_, _) => ToggleTaskList();
-        _timerWidget.Show();
+        _timerWidget.HasTasksChanged += (_, hasTasks) => UpdateWidgetVisibility(hasTasks);
+
+        // Only show widget if there are tasks
+        if (_timerWidget.HasTasks)
+        {
+            _timerWidget.Show();
+        }
 
         // Setup tray icon
         _trayService = new TrayIconService(_viewModel);
@@ -90,6 +96,24 @@ public partial class App : System.Windows.Application
         {
             _scratchPadWindow.Show();
             _scratchPadWindow.Activate();
+        }
+    }
+
+    private void UpdateWidgetVisibility(bool hasTasks)
+    {
+        if (_timerWidget == null)
+            return;
+
+        if (hasTasks)
+        {
+            if (!_timerWidget.IsVisible)
+            {
+                _timerWidget.Show();
+            }
+        }
+        else
+        {
+            _timerWidget.Hide();
         }
     }
 

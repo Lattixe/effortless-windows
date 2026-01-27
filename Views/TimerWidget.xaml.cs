@@ -28,9 +28,11 @@ public partial class TimerWidget : Window, INotifyPropertyChanged
         get
         {
             var task = _viewModel.CurrentTask;
-            return task?.DisplayName ?? "No tasks";
+            return task?.DisplayName ?? string.Empty;
         }
     }
+
+    public bool HasTasks => _viewModel.IncompleteTasks.Count > 0;
 
     public string TimerDisplay
     {
@@ -58,6 +60,8 @@ public partial class TimerWidget : Window, INotifyPropertyChanged
                 OnPropertyChanged(nameof(TaskName));
                 OnPropertyChanged(nameof(TimerVisibility));
                 OnPropertyChanged(nameof(PauseVisibility));
+                OnPropertyChanged(nameof(HasTasks));
+                HasTasksChanged?.Invoke(this, HasTasks);
                 break;
 
             case nameof(TaskViewModel.RemainingTime):
@@ -91,6 +95,7 @@ public partial class TimerWidget : Window, INotifyPropertyChanged
     }
 
     public event EventHandler? DoubleClicked;
+    public event EventHandler<bool>? HasTasksChanged;
 
     protected virtual void OnPropertyChanged(string propertyName)
     {

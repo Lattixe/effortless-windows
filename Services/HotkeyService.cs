@@ -11,6 +11,7 @@ public class HotkeyService : IDisposable
     // Modifiers
     private const uint MOD_ALT = 0x0001;
     private const uint MOD_CONTROL = 0x0002;
+    private const uint MOD_SHIFT = 0x0004;
     private const uint MOD_NOREPEAT = 0x4000;
 
     // Virtual key codes
@@ -50,14 +51,15 @@ public class HotkeyService : IDisposable
         _source = HwndSource.FromHwnd(_windowHandle);
         _source?.AddHook(HwndHook);
 
-        // Register hotkeys: Ctrl+Alt+Key
-        var modifiers = MOD_CONTROL | MOD_ALT | MOD_NOREPEAT;
+        // Register hotkeys
+        var ctrlAltModifiers = MOD_CONTROL | MOD_ALT | MOD_NOREPEAT;
+        var shiftAltModifiers = MOD_SHIFT | MOD_ALT | MOD_NOREPEAT;
 
-        RegisterHotKey(_windowHandle, HOTKEY_DONE, modifiers, VK_D);              // Ctrl+Alt+D - Mark done
-        RegisterHotKey(_windowHandle, HOTKEY_ADD_TIME, modifiers, VK_R);          // Ctrl+Alt+R - Add 5 min
-        RegisterHotKey(_windowHandle, HOTKEY_PAUSE, modifiers, VK_SPACE);         // Ctrl+Alt+Space - Pause
-        RegisterHotKey(_windowHandle, HOTKEY_TOGGLE_LIST, modifiers, VK_L);       // Ctrl+Alt+L - Task list
-        RegisterHotKey(_windowHandle, HOTKEY_TOGGLE_SCRATCHPAD, modifiers, VK_P); // Ctrl+Alt+P - Scratch pad
+        RegisterHotKey(_windowHandle, HOTKEY_DONE, ctrlAltModifiers, VK_D);              // Ctrl+Alt+D - Mark done
+        RegisterHotKey(_windowHandle, HOTKEY_ADD_TIME, ctrlAltModifiers, VK_R);          // Ctrl+Alt+R - Add 5 min
+        RegisterHotKey(_windowHandle, HOTKEY_PAUSE, ctrlAltModifiers, VK_SPACE);         // Ctrl+Alt+Space - Pause
+        RegisterHotKey(_windowHandle, HOTKEY_TOGGLE_LIST, shiftAltModifiers, VK_L);      // Shift+Alt+L - Task list
+        RegisterHotKey(_windowHandle, HOTKEY_TOGGLE_SCRATCHPAD, shiftAltModifiers, VK_P); // Shift+Alt+P - Scratch pad
     }
 
     private IntPtr HwndHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)

@@ -1,7 +1,6 @@
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Input;
-using System.Windows.Media;
 using Effortless.Services;
 
 namespace Effortless.Views;
@@ -9,7 +8,6 @@ namespace Effortless.Views;
 public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyChanged
 {
     private string _noteText = string.Empty;
-    private bool _isPinned = true;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -22,11 +20,9 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
         _noteText = StorageService.LoadScratchPad();
         OnPropertyChanged(nameof(NoteText));
 
-        // Position in bottom-right corner
+        // Focus editor when loaded
         Loaded += (_, _) =>
         {
-            PositionWindow();
-            UpdatePinVisual();
             NoteEditor.Focus();
         };
 
@@ -47,38 +43,11 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
         }
     }
 
-    private void PositionWindow()
-    {
-        var workArea = SystemParameters.WorkArea;
-        Left = workArea.Right - ActualWidth - 20;
-        Top = workArea.Bottom - ActualHeight - 60;
-    }
-
     private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (e.ClickCount == 1)
         {
             DragMove();
-        }
-    }
-
-    private void PinButton_Click(object sender, RoutedEventArgs e)
-    {
-        _isPinned = !_isPinned;
-        Topmost = _isPinned;
-        UpdatePinVisual();
-    }
-
-    private void UpdatePinVisual()
-    {
-        if (PinIcon != null)
-        {
-            // Bright when pinned, dim when unpinned
-            PinIcon.Opacity = _isPinned ? 1.0 : 0.4;
-        }
-        if (PinButton != null)
-        {
-            PinButton.ToolTip = _isPinned ? "Unpin (always on top)" : "Pin (always on top)";
         }
     }
 

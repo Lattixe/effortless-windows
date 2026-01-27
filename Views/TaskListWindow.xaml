@@ -12,6 +12,7 @@
         Topmost="True"
         ShowInTaskbar="False"
         ResizeMode="CanResizeWithGrip"
+        WindowStartupLocation="CenterScreen"
         Closing="Window_Closing"
         KeyDown="Window_KeyDown">
 
