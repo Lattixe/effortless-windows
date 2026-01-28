@@ -108,7 +108,9 @@ public partial class App : System.Windows.Application
         {
             if (!_timerWidget.IsVisible)
             {
+                // Show without activating to avoid stealing focus
                 _timerWidget.Show();
+                // Don't activate the widget - let current window keep focus
             }
         }
         else

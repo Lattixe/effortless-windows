@@ -24,8 +24,12 @@ public partial class TaskListWindow : System.Windows.Window, INotifyPropertyChan
         _taskText = _viewModel.GetTextFromTasks();
         OnPropertyChanged(nameof(TaskText));
 
-        // Focus the editor
+        // Focus the editor and track editing state
         Loaded += (_, _) => TaskEditor.Focus();
+        IsVisibleChanged += (_, _) =>
+        {
+            _viewModel.IsEditing = IsVisible;
+        };
     }
 
     public string TaskText
@@ -87,8 +91,9 @@ public partial class TaskListWindow : System.Windows.Window, INotifyPropertyChan
         Hide();
     }
 
-    private void Window_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    private void Window_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
+        // Only handle Escape key, let all other keys pass through to the TextBox
         if (e.Key == Key.Escape)
         {
             Hide();

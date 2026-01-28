@@ -9,6 +9,14 @@
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>Effortless</AssemblyName>
     <RootNamespace>Effortless</RootNamespace>
+    <ApplicationIcon>app.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="app.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Resource Include="icon.png" />
+  </ItemGroup>
 
 </Project>

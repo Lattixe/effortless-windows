@@ -7,6 +7,7 @@
         Background="Transparent"
         Topmost="True"
         ShowInTaskbar="False"
+        ShowActivated="False"
         ResizeMode="NoResize"
         SizeToContent="WidthAndHeight"
         MouseLeftButtonDown="Window_MouseLeftButtonDown">
@@ -29,7 +30,7 @@
 
             <!-- Timer -->
             <TextBlock Text="{Binding TimerDisplay}"
-                       Foreground="#6495ED"
+                       Foreground="#EF5350"
                        FontFamily="Consolas"
                        FontSize="13"
                        FontWeight="Bold"

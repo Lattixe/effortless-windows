@@ -103,7 +103,21 @@ public class TrayIconService : IDisposable
 
     private static Icon CreateIcon()
     {
-        // Create a simple clock-like icon
+        // Try to load custom icon from app.ico
+        try
+        {
+            var icoPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "app.ico");
+            if (System.IO.File.Exists(icoPath))
+            {
+                return new Icon(icoPath, 32, 32);
+            }
+        }
+        catch
+        {
+            // Fall back to generated icon
+        }
+
+        // Create a simple clock-like icon as fallback
         using var bitmap = new Bitmap(32, 32);
         using var g = Graphics.FromImage(bitmap);
 
@@ -113,15 +127,13 @@ public class TrayIconService : IDisposable
         g.Clear(Color.Transparent);
 
         // Draw circle (clock face)
-        using var brush = new SolidBrush(Color.FromArgb(100, 149, 237)); // Cornflower blue
+        using var brush = new SolidBrush(Color.FromArgb(239, 83, 80)); // Red to match app theme
         g.FillEllipse(brush, 2, 2, 28, 28);
 
-        // Draw clock hands
+        // Draw checkmark
         using var pen = new Pen(Color.White, 2);
-        // Hour hand
-        g.DrawLine(pen, 16, 16, 16, 8);
-        // Minute hand
-        g.DrawLine(pen, 16, 16, 22, 16);
+        g.DrawLine(pen, 10, 16, 14, 20);
+        g.DrawLine(pen, 14, 20, 22, 12);
 
         // Convert to icon
         var hIcon = bitmap.GetHicon();

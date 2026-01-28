@@ -56,8 +56,9 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
         Hide();
     }
 
-    private void Window_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    private void Window_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
+        // Only handle Escape key, let all other keys pass through to the TextBox
         if (e.Key == Key.Escape)
         {
             Hide();

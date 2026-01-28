@@ -13,6 +13,8 @@ public class TaskViewModel : ViewModelBase
     private bool _isPaused;
     private Guid? _currentTaskId;
     private bool _hasPlayedSound;
+    private bool _isEditing;
+    private bool _timerStarted; // Timer only starts after task list is closed
 
     public TaskViewModel()
     {
@@ -25,12 +27,13 @@ public class TaskViewModel : ViewModelBase
         _timer.Tick += Timer_Tick;
         _timer.Start();
 
-        // Initialize timer for current task
+        // Initialize timer display for current task (but don't start counting until edited)
         if (CurrentTask is { } task)
         {
             _currentTaskId = task.Id;
             _remainingTime = task.Duration;
         }
+        _timerStarted = false; // Don't auto-start on app launch - wait for first edit
     }
 
     public ObservableCollection<TaskItem> Tasks { get; }
@@ -60,6 +63,23 @@ public class TaskViewModel : ViewModelBase
             if (SetProperty(ref _isPaused, value))
             {
                 OnPropertyChanged(nameof(MenuBarTitle));
+            }
+        }
+    }
+
+    public bool IsEditing
+    {
+        get => _isEditing;
+        set
+        {
+            var wasEditing = _isEditing;
+            if (SetProperty(ref _isEditing, value))
+            {
+                // Start timer when editing ends (task list closes)
+                if (wasEditing && !value)
+                {
+                    _timerStarted = true;
+                }
             }
         }
     }
@@ -106,7 +126,7 @@ public class TaskViewModel : ViewModelBase
             return;
         }
 
-        if (IsPaused || current == null || !current.HasDuration)
+        if (IsPaused || IsEditing || !_timerStarted || current == null || !current.HasDuration)
             return;
 
         if (RemainingTime > TimeSpan.Zero)
@@ -114,12 +134,15 @@ public class TaskViewModel : ViewModelBase
             RemainingTime = RemainingTime.Subtract(TimeSpan.FromSeconds(1));
         }
 
-        // Timer completed
+        // Timer completed - auto-advance to next task
         if (RemainingTime <= TimeSpan.Zero && !_hasPlayedSound)
         {
             _hasPlayedSound = true;
             PlayNotificationSound();
             ShowNotification(current.DisplayName);
+
+            // Mark current task as done and move to next
+            MarkCurrentTaskDone();
         }
     }
 
@@ -225,6 +248,7 @@ public class TaskViewModel : ViewModelBase
         var newIncompleteTasks = new List<TaskItem>();
         var existingIncomplete = IncompleteTasks.ToList();
 
+        var lineIndex = 0;
         foreach (var line in lines)
         {
             if (string.IsNullOrWhiteSpace(line))
@@ -234,19 +258,21 @@ public class TaskViewModel : ViewModelBase
             if (string.IsNullOrWhiteSpace(parsed.DisplayName))
                 continue;
 
-            // Try to find existing task with same content to preserve ID
-            var existing = existingIncomplete.FirstOrDefault(t =>
-                t.RawInput.Trim() == line.Trim());
-
-            if (existing != null)
+            // Preserve ID by position - if we have an existing task at this position, update it
+            if (lineIndex < existingIncomplete.Count)
             {
+                var existing = existingIncomplete[lineIndex];
+                existing.RawInput = line;
+                existing.DisplayName = parsed.DisplayName;
+                existing.Duration = parsed.Duration;
                 newIncompleteTasks.Add(existing);
-                existingIncomplete.Remove(existing);
             }
             else
             {
+                // New task added at the end
                 newIncompleteTasks.Add(parsed);
             }
+            lineIndex++;
         }
 
         // Rebuild task list: new incomplete + completed
@@ -257,7 +283,7 @@ public class TaskViewModel : ViewModelBase
         foreach (var task in completed)
             Tasks.Add(task);
 
-        // Check if current task changed
+        // Update timer display while editing
         var newCurrent = CurrentTask;
         if (newCurrent?.Id != _currentTaskId)
         {
@@ -265,6 +291,13 @@ public class TaskViewModel : ViewModelBase
             _remainingTime = newCurrent?.Duration ?? TimeSpan.Zero;
             _isPaused = false;
             _hasPlayedSound = false;
+        }
+        else if (IsEditing && newCurrent != null)
+        {
+            // While editing, always sync the displayed time with the parsed duration
+            _remainingTime = newCurrent.Duration;
+            OnPropertyChanged(nameof(RemainingTime));
+            OnPropertyChanged(nameof(FormattedTime));
         }
 
         SaveTasks();

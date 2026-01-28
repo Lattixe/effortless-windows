@@ -21,6 +21,9 @@ public partial class TimerWidget : Window, INotifyPropertyChanged
 
         // Position in top-right corner of primary screen
         Loaded += (_, _) => PositionWindow();
+
+        // Reposition when size changes to stay on screen
+        SizeChanged += (_, _) => EnsureOnScreen();
     }
 
     public string TaskName
@@ -32,7 +35,7 @@ public partial class TimerWidget : Window, INotifyPropertyChanged
         }
     }
 
-    public bool HasTasks => _viewModel.IncompleteTasks.Count > 0;
+    public bool HasTasks => _viewModel.IncompleteTasks.Any();
 
     public string TimerDisplay
     {
@@ -79,6 +82,33 @@ public partial class TimerWidget : Window, INotifyPropertyChanged
         var workArea = SystemParameters.WorkArea;
         Left = workArea.Right - ActualWidth - 10;
         Top = workArea.Top + 10;
+    }
+
+    private void EnsureOnScreen()
+    {
+        var workArea = SystemParameters.WorkArea;
+
+        // If widget extends beyond right edge, reposition it
+        if (Left + ActualWidth > workArea.Right)
+        {
+            Left = workArea.Right - ActualWidth - 10;
+        }
+
+        // Ensure left edge is visible
+        if (Left < workArea.Left)
+        {
+            Left = workArea.Left + 10;
+        }
+
+        // Ensure top/bottom are visible
+        if (Top < workArea.Top)
+        {
+            Top = workArea.Top + 10;
+        }
+        if (Top + ActualHeight > workArea.Bottom)
+        {
+            Top = workArea.Bottom - ActualHeight - 10;
+        }
     }
 
     private void Window_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
