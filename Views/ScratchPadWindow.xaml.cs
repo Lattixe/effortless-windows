@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using Effortless.Services;
 
@@ -72,6 +73,15 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
         e.Cancel = true;
         StorageService.SaveScratchPad(_noteText);
         Hide();
+    }
+
+    private void NoteEditor_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (NoteEditor.Template.FindName("PART_ContentHost", NoteEditor) is ScrollViewer sv)
+        {
+            sv.ScrollToVerticalOffset(sv.VerticalOffset - e.Delta / 3.0);
+            e.Handled = true;
+        }
     }
 
     protected virtual void OnPropertyChanged(string propertyName)

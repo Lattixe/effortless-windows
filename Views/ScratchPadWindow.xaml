@@ -16,6 +16,64 @@
         Closing="Window_Closing"
         PreviewKeyDown="Window_PreviewKeyDown">
 
+    <Window.Resources>
+        <!-- Dark scrollbar style -->
+        <Style x:Key="DarkScrollBar" TargetType="ScrollBar">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Width" Value="8"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ScrollBar">
+                        <Grid>
+                            <Track x:Name="PART_Track" IsDirectionReversed="True">
+                                <Track.Thumb>
+                                    <Thumb>
+                                        <Thumb.Style>
+                                            <Style TargetType="Thumb">
+                                                <Setter Property="Template">
+                                                    <Setter.Value>
+                                                        <ControlTemplate TargetType="Thumb">
+                                                            <Border Background="#333333"
+                                                                    CornerRadius="4"
+                                                                    Margin="1"/>
+                                                        </ControlTemplate>
+                                                    </Setter.Value>
+                                                </Setter>
+                                            </Style>
+                                        </Thumb.Style>
+                                    </Thumb>
+                                </Track.Thumb>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="DarkScrollViewer" TargetType="ScrollViewer">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ScrollViewer">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <ScrollContentPresenter Grid.Column="0"/>
+                            <ScrollBar x:Name="PART_VerticalScrollBar"
+                                       Grid.Column="1"
+                                       Style="{StaticResource DarkScrollBar}"
+                                       Value="{TemplateBinding VerticalOffset}"
+                                       Maximum="{TemplateBinding ScrollableHeight}"
+                                       ViewportSize="{TemplateBinding ViewportHeight}"
+                                       Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}"/>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
     <Border Background="#000000"
             CornerRadius="8"
             BorderBrush="#333333"
@@ -87,6 +145,7 @@
             <TextBox Grid.Row="1"
                      x:Name="NoteEditor"
                      Text="{Binding NoteText, UpdateSourceTrigger=PropertyChanged}"
+                     PreviewMouseWheel="NoteEditor_PreviewMouseWheel"
                      Background="#000000"
                      Foreground="#e0e0e0"
                      CaretBrush="#ffffff"
@@ -107,6 +166,7 @@
                                     <Border Background="{TemplateBinding Background}"
                                             CornerRadius="0,0,8,8">
                                         <ScrollViewer x:Name="PART_ContentHost"
+                                                      Style="{StaticResource DarkScrollViewer}"
                                                       Margin="{TemplateBinding Padding}"/>
                                     </Border>
                                 </ControlTemplate>
