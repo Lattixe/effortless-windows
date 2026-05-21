@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Effortless.Services;
 using Effortless.ViewModels;
 using Effortless.Views;
@@ -45,6 +46,9 @@ public partial class App : System.Windows.Application
         _timerWidget.DoubleClicked += (_, _) => ToggleTaskList();
         _timerWidget.HasTasksChanged += (_, hasTasks) => UpdateWidgetVisibility(hasTasks);
 
+        // Sync widget visibility when editing ends (covers Escape/X close paths)
+        _viewModel.PropertyChanged += ViewModel_PropertyChanged;
+
         // Only show widget if there are tasks
         if (_timerWidget.HasTasks)
         {
@@ -65,6 +69,16 @@ public partial class App : System.Windows.Application
         _hotkeyService.PausePressed += (_, _) => _viewModel.TogglePause();
         _hotkeyService.ToggleListPressed += (_, _) => ToggleTaskList();
         _hotkeyService.ToggleScratchPadPressed += (_, _) => ToggleScratchPad();
+    }
+
+    private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(TaskViewModel.IsEditing) && _viewModel?.IsEditing == false)
+        {
+            // Editing just ended - sync widget visibility
+            if (_timerWidget != null)
+                UpdateWidgetVisibility(_timerWidget.HasTasks);
+        }
     }
 
     private void ToggleTaskList()
@@ -101,7 +115,13 @@ public partial class App : System.Windows.Application
 
     private void UpdateWidgetVisibility(bool hasTasks)
     {
-        if (_timerWidget == null)
+        if (_timerWidget == null || _viewModel == null)
+            return;
+
+        // Don't toggle widget visibility while editing - Tasks.Clear() in SyncTasksFromText
+        // momentarily empties the collection, which would hide then re-show the widget,
+        // stealing focus from the TaskListWindow on every keystroke.
+        if (_viewModel.IsEditing)
             return;
 
         if (hasTasks)
