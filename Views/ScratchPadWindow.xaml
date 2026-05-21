@@ -24,7 +24,7 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ScrollBar">
-                        <Grid Margin="0,4,2,4">
+                        <Grid Margin="0,4,0,4">
                             <Track x:Name="PART_Track" IsDirectionReversed="True">
                                 <Track.Thumb>
                                     <Thumb>
@@ -70,7 +70,8 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <ScrollContentPresenter Grid.Column="0"/>
+                            <ScrollContentPresenter Grid.Column="0"
+                                                    Margin="{TemplateBinding Padding}"/>
                             <ScrollBar x:Name="PART_VerticalScrollBar"
                                        Grid.Column="1"
                                        Style="{StaticResource DarkScrollBar}"
@@ -178,7 +179,7 @@
                                             CornerRadius="0,0,8,8">
                                         <ScrollViewer x:Name="PART_ContentHost"
                                                       Style="{StaticResource DarkScrollViewer}"
-                                                      Margin="{TemplateBinding Padding}"/>
+                                                      Padding="{TemplateBinding Padding}"/>
                                     </Border>
                                 </ControlTemplate>
                             </Setter.Value>
