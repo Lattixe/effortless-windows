@@ -12,7 +12,9 @@ public static class StorageService
     );
 
     private static readonly string TasksFile = Path.Combine(DataFolder, "tasks.json");
-    private static readonly string ScratchPadFile = Path.Combine(DataFolder, "scratchpad.txt");
+    private static readonly string ScratchPadFolder = Path.Combine(DataFolder, "ScratchPad");
+    private static readonly string ScratchPadFile = Path.Combine(ScratchPadFolder, "current.md");
+    private static readonly string LegacyScratchPadFile = Path.Combine(DataFolder, "scratchpad.txt");
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -55,10 +57,19 @@ public static class StorageService
     {
         try
         {
-            if (!File.Exists(ScratchPadFile))
-                return string.Empty;
+            if (File.Exists(ScratchPadFile))
+                return File.ReadAllText(ScratchPadFile);
 
-            return File.ReadAllText(ScratchPadFile);
+            // One-time migration from legacy scratchpad.txt
+            if (File.Exists(LegacyScratchPadFile))
+            {
+                var legacy = File.ReadAllText(LegacyScratchPadFile);
+                SaveScratchPad(legacy);
+                try { File.Delete(LegacyScratchPadFile); } catch { }
+                return legacy;
+            }
+
+            return string.Empty;
         }
         catch
         {
@@ -70,8 +81,8 @@ public static class StorageService
     {
         try
         {
-            if (!Directory.Exists(DataFolder))
-                Directory.CreateDirectory(DataFolder);
+            if (!Directory.Exists(ScratchPadFolder))
+                Directory.CreateDirectory(ScratchPadFolder);
 
             File.WriteAllText(ScratchPadFile, content);
         }
