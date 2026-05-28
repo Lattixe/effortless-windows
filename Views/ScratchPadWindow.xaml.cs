@@ -3,17 +3,20 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using Effortless.Services;
+using Effortless.ViewModels;
 
 namespace Effortless.Views;
 
 public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyChanged
 {
+    private readonly TaskViewModel? _viewModel;
     private string _noteText = string.Empty;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    public ScratchPadWindow()
+    public ScratchPadWindow(TaskViewModel? viewModel = null)
     {
+        _viewModel = viewModel;
         InitializeComponent();
         DataContext = this;
 
@@ -59,12 +62,48 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
 
     private void Window_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
-        // Only handle Escape key, let all other keys pass through to the TextBox
         if (e.Key == Key.Escape)
         {
             Hide();
             e.Handled = true;
+            return;
         }
+
+        if (e.Key == Key.Enter && TryExecuteSlashCommand())
+        {
+            e.Handled = true;
+        }
+    }
+
+    private bool TryExecuteSlashCommand()
+    {
+        if (_viewModel == null)
+            return false;
+
+        var text = NoteEditor.Text;
+        var caret = NoteEditor.CaretIndex;
+
+        var lineStart = caret > 0 ? text.LastIndexOf('\n', caret - 1) + 1 : 0;
+        var lineEnd = text.IndexOf('\n', caret);
+        if (lineEnd < 0) lineEnd = text.Length;
+
+        var line = text.Substring(lineStart, lineEnd - lineStart);
+        var trimmed = line.TrimStart();
+        if (!trimmed.StartsWith("/"))
+            return false;
+
+        var taskInput = trimmed.Substring(1).Trim();
+        if (string.IsNullOrWhiteSpace(taskInput))
+            return false;
+
+        _viewModel.AddTask(taskInput);
+
+        var indent = line.Substring(0, line.Length - trimmed.Length);
+        var replacement = $"{indent}- [ ] {taskInput}\n";
+        NoteEditor.Text = text.Remove(lineStart, lineEnd - lineStart).Insert(lineStart, replacement);
+        NoteEditor.CaretIndex = lineStart + replacement.Length;
+
+        return true;
     }
 
     private void Window_Closing(object sender, CancelEventArgs e)

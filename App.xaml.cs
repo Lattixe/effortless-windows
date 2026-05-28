@@ -39,7 +39,7 @@ public partial class App : System.Windows.Application
         _taskListWindow = new TaskListWindow(_viewModel);
 
         // Create scratch pad window (hidden initially)
-        _scratchPadWindow = new ScratchPadWindow();
+        _scratchPadWindow = new ScratchPadWindow(_viewModel);
 
         // Create timer widget (visible only when there are tasks)
         _timerWidget = new TimerWidget(_viewModel);

@@ -155,6 +155,7 @@ public class TaskViewModel : ViewModelBase
         // Insert before completed tasks
         var insertIndex = Tasks.Count(t => !t.IsCompleted);
         Tasks.Insert(insertIndex, task);
+        _timerStarted = true;
         SaveTasks();
         NotifyTaskListChanged();
     }
