@@ -19,6 +19,7 @@ public class HotkeyService : IDisposable
     private const uint VK_R = 0x52;
     private const uint VK_P = 0x50;
     private const uint VK_L = 0x4C;
+    private const uint VK_V = 0x56;
     private const uint VK_SPACE = 0x20;
 
     // Hotkey IDs
@@ -27,6 +28,7 @@ public class HotkeyService : IDisposable
     private const int HOTKEY_PAUSE = 3;
     private const int HOTKEY_TOGGLE_LIST = 4;
     private const int HOTKEY_TOGGLE_SCRATCHPAD = 5;
+    private const int HOTKEY_VAULT = 6;
 
     [DllImport("user32.dll")]
     private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
@@ -43,6 +45,7 @@ public class HotkeyService : IDisposable
     public event EventHandler? PausePressed;
     public event EventHandler? ToggleListPressed;
     public event EventHandler? ToggleScratchPadPressed;
+    public event EventHandler? VaultPressed;
 
     public void Initialize(Window window)
     {
@@ -60,6 +63,7 @@ public class HotkeyService : IDisposable
         RegisterHotKey(_windowHandle, HOTKEY_PAUSE, ctrlAltModifiers, VK_SPACE);         // Ctrl+Alt+Space - Pause
         RegisterHotKey(_windowHandle, HOTKEY_TOGGLE_LIST, shiftAltModifiers, VK_L);      // Shift+Alt+L - Task list
         RegisterHotKey(_windowHandle, HOTKEY_TOGGLE_SCRATCHPAD, shiftAltModifiers, VK_P); // Shift+Alt+P - Scratch pad
+        RegisterHotKey(_windowHandle, HOTKEY_VAULT, shiftAltModifiers, VK_V);            // Shift+Alt+V - Vault thought
     }
 
     private IntPtr HwndHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -90,6 +94,10 @@ public class HotkeyService : IDisposable
                     ToggleScratchPadPressed?.Invoke(this, EventArgs.Empty);
                     handled = true;
                     break;
+                case HOTKEY_VAULT:
+                    VaultPressed?.Invoke(this, EventArgs.Empty);
+                    handled = true;
+                    break;
             }
         }
 
@@ -110,6 +118,7 @@ public class HotkeyService : IDisposable
             UnregisterHotKey(_windowHandle, HOTKEY_PAUSE);
             UnregisterHotKey(_windowHandle, HOTKEY_TOGGLE_LIST);
             UnregisterHotKey(_windowHandle, HOTKEY_TOGGLE_SCRATCHPAD);
+            UnregisterHotKey(_windowHandle, HOTKEY_VAULT);
         }
 
         _source?.RemoveHook(HwndHook);

@@ -43,12 +43,15 @@ A minimalist task timer for Windows. Focus on what matters.
 
 | Shortcut | Action |
 |----------|--------|
-| `Ctrl+Alt+L` | Toggle task list |
-| `Ctrl+Alt+P` | Toggle scratch pad |
+| `Shift+Alt+L` | Toggle task list |
+| `Shift+Alt+P` | Toggle scratch pad |
+| `Shift+Alt+V` | Vault the current scratch-pad thought |
 | `Ctrl+Alt+D` | Mark current task done |
 | `Ctrl+Alt+R` | Add 5 minutes to timer |
 | `Ctrl+Alt+Space` | Pause/Resume timer |
 | `Esc` | Close current window |
+
+Inside the scratch pad: `Ctrl` `+` / `Ctrl` `-` adjust the font size, `Ctrl` `0` resets it.
 
 ## How It Works
 

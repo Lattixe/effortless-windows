@@ -228,7 +228,7 @@
                      BorderThickness="0"
                      Padding="16,12"
                      FontFamily="Segoe UI"
-                     FontSize="14"
+                     FontSize="{Binding EditorFontSize}"
                      AcceptsReturn="True"
                      TextWrapping="Wrap"
                      VerticalScrollBarVisibility="Auto"

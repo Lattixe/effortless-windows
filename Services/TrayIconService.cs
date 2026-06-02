@@ -46,15 +46,15 @@ public class TrayIconService : IDisposable
     {
         var menu = new ContextMenuStrip();
 
-        var toggleItem = new ToolStripMenuItem("Toggle Task List (Ctrl+Alt+L)");
+        var toggleItem = new ToolStripMenuItem("Toggle Task List (Shift+Alt+L)");
         toggleItem.Click += (_, _) => ToggleListRequested?.Invoke(this, EventArgs.Empty);
         menu.Items.Add(toggleItem);
 
-        var scratchPadItem = new ToolStripMenuItem("Toggle Scratch Pad (Ctrl+Alt+P)");
+        var scratchPadItem = new ToolStripMenuItem("Toggle Scratch Pad (Shift+Alt+P)");
         scratchPadItem.Click += (_, _) => ToggleScratchPadRequested?.Invoke(this, EventArgs.Empty);
         menu.Items.Add(scratchPadItem);
 
-        var vaultItem = new ToolStripMenuItem("Thought Vault");
+        var vaultItem = new ToolStripMenuItem("Thought Vault (Shift+Alt+V to capture)");
         vaultItem.Click += (_, _) => OpenVaultRequested?.Invoke(this, EventArgs.Empty);
         menu.Items.Add(vaultItem);
 

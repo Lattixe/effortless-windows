@@ -14,6 +14,7 @@ public static class StorageService
     );
 
     private static readonly string TasksFile = Path.Combine(DataFolder, "tasks.json");
+    private static readonly string SettingsFile = Path.Combine(DataFolder, "settings.json");
     private static readonly string ScratchPadFolder = Path.Combine(DataFolder, "ScratchPad");
     private static readonly string ScratchPadFile = Path.Combine(ScratchPadFolder, "current.md");
     private static readonly string LegacyScratchPadFile = Path.Combine(DataFolder, "scratchpad.txt");
@@ -103,6 +104,46 @@ public static class StorageService
         {
             // Silently fail
         }
+    }
+
+    public static AppSettings LoadSettings()
+    {
+        try
+        {
+            if (!File.Exists(SettingsFile))
+                return new AppSettings();
+
+            var json = File.ReadAllText(SettingsFile);
+            return JsonSerializer.Deserialize<AppSettings>(json, JsonOptions) ?? new AppSettings();
+        }
+        catch
+        {
+            return new AppSettings();
+        }
+    }
+
+    public static void SaveSettings(AppSettings settings)
+    {
+        try
+        {
+            if (!Directory.Exists(DataFolder))
+                Directory.CreateDirectory(DataFolder);
+
+            File.WriteAllText(SettingsFile, JsonSerializer.Serialize(settings, JsonOptions));
+        }
+        catch
+        {
+            // Silently fail
+        }
+    }
+
+    public static double LoadScratchPadFontSize() => LoadSettings().ScratchPadFontSize;
+
+    public static void SaveScratchPadFontSize(double size)
+    {
+        var settings = LoadSettings();
+        settings.ScratchPadFontSize = size;
+        SaveSettings(settings);
     }
 
     // ---------------------------------------------------------------------

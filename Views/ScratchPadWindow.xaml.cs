@@ -13,10 +13,15 @@ namespace Effortless.Views;
 
 public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyChanged
 {
+    private const double MinFontSize = 8;
+    private const double MaxFontSize = 40;
+    private const double DefaultFontSize = 14;
+
     private readonly TaskViewModel? _viewModel;
     private readonly DispatcherTimer _statusTimer;
     private VaultWindow? _vaultWindow;
     private string _noteText = string.Empty;
+    private double _editorFontSize = DefaultFontSize;
 
     // Content snapshot of the last vaulted/loaded state, used to detect whether
     // the pad holds genuinely-unsaved edits (so we never create duplicate
@@ -24,6 +29,7 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
     private string _vaultedSnapshot = string.Empty;
 
     public event PropertyChangedEventHandler? PropertyChanged;
+    public event EventHandler<string>? ThoughtVaulted;
 
     public ScratchPadWindow(TaskViewModel? viewModel = null)
     {
@@ -34,6 +40,10 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
         // Load saved note
         _noteText = StorageService.LoadScratchPad();
         OnPropertyChanged(nameof(NoteText));
+
+        // Restore the saved editor font size
+        _editorFontSize = Math.Clamp(StorageService.LoadScratchPadFontSize(), MinFontSize, MaxFontSize);
+        OnPropertyChanged(nameof(EditorFontSize));
 
         _statusTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2.5) };
         _statusTimer.Tick += (_, _) =>
@@ -61,6 +71,21 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
             {
                 _noteText = value;
                 OnPropertyChanged(nameof(NoteText));
+            }
+        }
+    }
+
+    public double EditorFontSize
+    {
+        get => _editorFontSize;
+        set
+        {
+            var clamped = Math.Clamp(value, MinFontSize, MaxFontSize);
+            if (Math.Abs(_editorFontSize - clamped) > 0.01)
+            {
+                _editorFontSize = clamped;
+                OnPropertyChanged(nameof(EditorFontSize));
+                StorageService.SaveScratchPadFontSize(clamped);
             }
         }
     }
@@ -116,6 +141,32 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
 
     private void Window_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
+        // Ctrl +/- to resize the editor font, Ctrl+0 to reset.
+        if ((Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+        {
+            switch (e.Key)
+            {
+                case Key.OemPlus:
+                case Key.Add:
+                    EditorFontSize += 1;
+                    ShowStatus($"Font size {EditorFontSize:0}");
+                    e.Handled = true;
+                    return;
+                case Key.OemMinus:
+                case Key.Subtract:
+                    EditorFontSize -= 1;
+                    ShowStatus($"Font size {EditorFontSize:0}");
+                    e.Handled = true;
+                    return;
+                case Key.D0:
+                case Key.NumPad0:
+                    EditorFontSize = DefaultFontSize;
+                    ShowStatus($"Font size {EditorFontSize:0}");
+                    e.Handled = true;
+                    return;
+            }
+        }
+
         if (e.Key == Key.Escape)
         {
             Hide();
@@ -127,6 +178,18 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
         {
             e.Handled = true;
         }
+    }
+
+    /// <summary>
+    /// Vaults the current pad content. Invoked by the Shift+Alt+V global hotkey;
+    /// surfaces a tray notification when the pad isn't on screen to give feedback.
+    /// </summary>
+    public void VaultCurrentThought()
+    {
+        var wasVisible = IsVisible;
+        var thought = VaultPad(NoteEditor.Text, explicitTitle: null);
+        if (thought != null && !wasVisible)
+            ThoughtVaulted?.Invoke(this, thought.Title);
     }
 
     private bool TryExecuteSlashCommand()
@@ -176,19 +239,19 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
         return true;
     }
 
-    private void VaultPad(string content, string? explicitTitle)
+    private VaultThought? VaultPad(string content, string? explicitTitle)
     {
         if (string.IsNullOrWhiteSpace(content))
         {
             ShowStatus("Nothing to vault", isError: true);
-            return;
+            return null;
         }
 
         var thought = StorageService.SaveThought(content, explicitTitle);
         if (thought == null)
         {
             ShowStatus("Couldn't vault thought", isError: true);
-            return;
+            return null;
         }
 
         // Start fresh
@@ -198,6 +261,7 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
 
         _vaultWindow?.RefreshThoughts();
         ShowStatus($"Vaulted: {thought.Title}");
+        return thought;
     }
 
     /// <summary>
