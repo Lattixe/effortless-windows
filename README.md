@@ -133,11 +133,34 @@ Configure it in `%LOCALAPPDATA%\Effortless\settings.json`:
 
 ## Installation
 
-### Quick Install (Recommended)
+### One-liner install (Recommended)
+
+In PowerShell:
+
+```powershell
+iwr -useb https://raw.githubusercontent.com/Lattixe/effortless-windows/claude/elegant-mccarthy-2sMgL/install-latest.ps1 | iex
+```
+
+This finds (or clones) the repo, pulls the latest code, publishes a self-contained
+Windows build, installs to `%LOCALAPPDATA%\Effortless`, adds Start Menu and Startup
+shortcuts, and launches it as a real Windows app — independent of the terminal you
+ran it from. Closing PowerShell will **not** close Effortless.
+
+### Dev loop (run without installing)
+
+For iterating on the code, run from source — but note this ties the app's lifetime
+to the terminal:
+
+```powershell
+iwr -useb https://raw.githubusercontent.com/Lattixe/effortless-windows/claude/elegant-mccarthy-2sMgL/dev-launch.ps1 | iex
+```
+
+### Manual install
 
 1. Clone or download this repo
-2. Run the install script:
+2. Build and install:
    ```powershell
+   dotnet publish -c Release -r win-x64 --self-contained -o publish
    powershell -ExecutionPolicy Bypass -File install.ps1
    ```
 
@@ -154,15 +177,6 @@ powershell -ExecutionPolicy Bypass -File uninstall.ps1
 ```
 
 Your tasks and notes are preserved after uninstall.
-
-### Build from Source
-
-```bash
-git clone https://github.com/Lattixe/effortless-windows.git
-cd effortless-windows
-dotnet publish -c Release -r win-x64 --self-contained -o publish
-powershell -ExecutionPolicy Bypass -File install.ps1
-```
 
 ## Data Storage
 
