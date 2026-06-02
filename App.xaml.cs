@@ -40,6 +40,8 @@ public partial class App : System.Windows.Application
 
         // Create scratch pad window (hidden initially)
         _scratchPadWindow = new ScratchPadWindow(_viewModel);
+        _scratchPadWindow.ThoughtVaulted += (_, title) =>
+            _trayService?.ShowBalloon("Vaulted", $"\"{title}\" saved to your vault");
 
         // Create timer widget (visible only when there are tasks)
         _timerWidget = new TimerWidget(_viewModel);
@@ -59,6 +61,7 @@ public partial class App : System.Windows.Application
         _trayService = new TrayIconService(_viewModel);
         _trayService.ToggleListRequested += (_, _) => ToggleTaskList();
         _trayService.ToggleScratchPadRequested += (_, _) => ToggleScratchPad();
+        _trayService.OpenVaultRequested += (_, _) => _scratchPadWindow?.OpenVaultBrowser();
         _trayService.ExitRequested += (_, _) => Shutdown();
 
         // Setup global hotkeys
@@ -69,6 +72,7 @@ public partial class App : System.Windows.Application
         _hotkeyService.PausePressed += (_, _) => _viewModel.TogglePause();
         _hotkeyService.ToggleListPressed += (_, _) => ToggleTaskList();
         _hotkeyService.ToggleScratchPadPressed += (_, _) => ToggleScratchPad();
+        _hotkeyService.VaultPressed += (_, _) => _scratchPadWindow?.VaultCurrentThought();
     }
 
     private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
