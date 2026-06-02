@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Windows;
-using System.Windows.Media;
+using Brush = System.Windows.Media.Brush;
+using BrushConverter = System.Windows.Media.BrushConverter;
 
 namespace Effortless.Services;
 
