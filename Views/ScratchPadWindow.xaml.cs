@@ -143,7 +143,13 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
             _askWindow = null;
         }
 
-        _askWindow = new AskClaudeWindow("scratch pad", StorageService.GetScratchPadFolder(), NoteEditor.Text);
+        // Run Claude with the vault folder as its working dir (same as the
+        // Vault Browser path — known to work). The pad's content is passed
+        // inline, and Claude can also reach for other vaulted thoughts if a
+        // follow-up question references them.
+        StorageService.EnsureVaultReadme();
+
+        _askWindow = new AskClaudeWindow("scratch pad", StorageService.GetVaultFolder(), NoteEditor.Text);
         _askWindow.Closed += (_, _) => _askWindow = null;
         _askWindow.Show();
         _askWindow.Activate();
