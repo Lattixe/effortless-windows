@@ -194,7 +194,10 @@
                                 Click="ThemeToggle_Click"
                                 Style="{StaticResource TitleBarButton}"
                                 ToolTip="Toggle light/dark theme">
-                            <TextBlock x:Name="ThemeToggleGlyph" Text="☀" FontSize="12"/>
+                            <TextBlock x:Name="ThemeToggleGlyph"
+                                       Text="&#xE706;"
+                                       FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                       FontSize="13"/>
                         </Button>
                         <!-- Close button -->
                         <Button Click="CloseButton_Click"

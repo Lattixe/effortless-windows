@@ -68,13 +68,17 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
         NoteEditor.TextChanged += (_, _) => StorageService.SaveScratchPad(_noteText);
     }
 
+    // Segoe Fluent Icons / MDL2 Assets glyphs (private-use codepoints).
+    private const string SunGlyph = "\uE706";   // Brightness — sun with rays
+    private const string MoonGlyph = "\uE793";  // ClearNight — crescent moon
+
     private void OnThemeChanged(object? sender, EventArgs e) => UpdateThemeGlyph();
 
     private void UpdateThemeGlyph()
     {
-        // Show the destination state: ☀ when currently dark (click for light),
-        // ☾ when currently light (click for dark).
-        ThemeToggleGlyph.Text = ThemeService.IsDark ? "☀" : "☾";
+        // Show the destination state: sun when currently dark (click for
+        // light), moon when currently light (click for dark).
+        ThemeToggleGlyph.Text = ThemeService.IsDark ? SunGlyph : MoonGlyph;
     }
 
     private void ThemeToggle_Click(object sender, RoutedEventArgs e)
