@@ -11,14 +11,17 @@ public sealed class ClaudeResult
     public bool Success { get; init; }
     public string Text { get; init; } = string.Empty;
     public string Error { get; init; } = string.Empty;
+    public bool Cancelled { get; init; }
 }
 
 /// <summary>
 /// Runs the Claude Code CLI headlessly to "prompt against" the user's notes.
 ///
 /// Design notes (verified against claude 2.x):
-/// - The prompt is delivered on <c>stdin</c>, never on the command line, so there
-///   is no quoting/escaping to get wrong and notes can contain anything.
+/// - The prompt is written to a temp file and fed to the CLI via cmd's own
+///   <c>&lt; file</c> redirection. This avoids putting note text on the command
+///   line (no quoting) AND guarantees the CLI sees end-of-input, so it never
+///   waits for more stdin (a hang we hit when piping across the cmd.exe layer).
 /// - <c>--allowedTools Read,Grep,Glob</c> lets the model read files in the working
 ///   directory without an interactive permission prompt, while edits/Bash stay
 ///   blocked in headless mode.
@@ -45,9 +48,21 @@ public static class ClaudeService
             ? string.Empty
             : $"--model {settings.ClaudeModel.Trim()} ";
 
-        // The prompt is on stdin, so the command line carries no user text.
+        var promptFile = Path.Combine(Path.GetTempPath(), $"effortless-ask-{Guid.NewGuid():N}.txt");
+
+        try
+        {
+            await File.WriteAllTextAsync(promptFile, prompt, new UTF8Encoding(false), ct);
+        }
+        catch (Exception ex)
+        {
+            return new ClaudeResult { Success = false, Error = $"Could not stage prompt: {ex.Message}" };
+        }
+
+        // Prompt comes from the redirected file; the command line carries no note text.
         var arguments =
-            $"/c {claudeCmd} -p --output-format text --allowedTools Read,Grep,Glob {modelFlag}{sessionFlag}";
+            $"/c {claudeCmd} -p --output-format text --allowedTools Read,Grep,Glob " +
+            $"{modelFlag}{sessionFlag} < \"{promptFile}\"";
 
         var psi = new ProcessStartInfo
         {
@@ -56,10 +71,8 @@ public static class ClaudeService
             WorkingDirectory = Directory.Exists(workingDir) ? workingDir : Environment.CurrentDirectory,
             UseShellExecute = false,
             CreateNoWindow = true,
-            RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
-            StandardInputEncoding = new UTF8Encoding(false),
             StandardOutputEncoding = Encoding.UTF8,
             StandardErrorEncoding = Encoding.UTF8
         };
@@ -71,29 +84,20 @@ public static class ClaudeService
         }
         catch (Exception ex)
         {
+            TryDelete(promptFile);
             return new ClaudeResult { Success = false, Error = $"Could not start Claude CLI: {ex.Message}" };
         }
 
         if (process == null)
+        {
+            TryDelete(promptFile);
             return new ClaudeResult { Success = false, Error = "Could not start Claude CLI." };
+        }
 
         try
         {
-            // Start draining stdout/stderr before writing stdin to avoid pipe deadlocks.
             var stdoutTask = process.StandardOutput.ReadToEndAsync();
             var stderrTask = process.StandardError.ReadToEndAsync();
-
-            // Writing can fail if the process already exited (e.g. claude not found);
-            // swallow it so we still report the real stderr below.
-            try
-            {
-                await using var stdin = process.StandardInput;
-                await stdin.WriteAsync(prompt);
-            }
-            catch (IOException)
-            {
-                // process ended before consuming stdin
-            }
 
             await process.WaitForExitAsync(ct);
 
@@ -105,14 +109,19 @@ public static class ClaudeService
 
             var error = stderr.Length > 0
                 ? stderr
-                : stdout.Length > 0 ? stdout : "Claude returned no output.";
+                : stdout.Length > 0 ? stdout : "Claude returned no output (exit code " + process.ExitCode + ").";
 
             if (error.Contains("not recognized", StringComparison.OrdinalIgnoreCase) ||
-                error.Contains("cannot find", StringComparison.OrdinalIgnoreCase) ||
-                error.Contains("is not recognized", StringComparison.OrdinalIgnoreCase))
+                error.Contains("cannot find", StringComparison.OrdinalIgnoreCase))
             {
                 error += "\n\nMake sure Claude Code is installed and on your PATH, or set " +
                          "\"ClaudeCommand\" in settings.json (e.g. a full path, or \"wsl claude\").";
+            }
+            else if (error.Contains("login", StringComparison.OrdinalIgnoreCase) ||
+                     error.Contains("auth", StringComparison.OrdinalIgnoreCase) ||
+                     error.Contains("api key", StringComparison.OrdinalIgnoreCase))
+            {
+                error += "\n\nClaude may not be authenticated. Run `claude` once in a terminal and sign in.";
             }
 
             return new ClaudeResult { Success = false, Error = error };
@@ -120,7 +129,7 @@ public static class ClaudeService
         catch (OperationCanceledException)
         {
             TryKill(process);
-            return new ClaudeResult { Success = false, Error = "Cancelled." };
+            return new ClaudeResult { Success = false, Cancelled = true, Error = "Cancelled." };
         }
         catch (Exception ex)
         {
@@ -130,6 +139,7 @@ public static class ClaudeService
         finally
         {
             process.Dispose();
+            TryDelete(promptFile);
         }
     }
 
@@ -144,5 +154,10 @@ public static class ClaudeService
         {
             // best effort
         }
+    }
+
+    private static void TryDelete(string path)
+    {
+        try { File.Delete(path); } catch { /* best effort */ }
     }
 }

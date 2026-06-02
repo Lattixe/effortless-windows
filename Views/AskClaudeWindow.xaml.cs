@@ -17,6 +17,7 @@ public partial class AskClaudeWindow : System.Windows.Window
     private CancellationTokenSource? _cts;
     private bool _firstSent;
     private bool _busy;
+    private bool _userStopped;
 
     /// <param name="scopeLabel">e.g. "scratch pad" or "vault" (shown in the title).</param>
     /// <param name="workingDir">Directory Claude runs in (its read scope).</param>
@@ -37,7 +38,11 @@ public partial class AskClaudeWindow : System.Windows.Window
 
     private async void AskButton_Click(object sender, RoutedEventArgs e) => await SendAsync();
 
-    private void StopButton_Click(object sender, RoutedEventArgs e) => _cts?.Cancel();
+    private void StopButton_Click(object sender, RoutedEventArgs e)
+    {
+        _userStopped = true;
+        _cts?.Cancel();
+    }
 
     private async void PromptBox_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
@@ -66,10 +71,11 @@ public partial class AskClaudeWindow : System.Windows.Window
         AppendTurn("You", question);
         PromptBox.Clear();
         SetBusy(true);
+        _userStopped = false;
 
         ClaudeResult result;
         _cts = new CancellationTokenSource();
-        _cts.CancelAfter(TimeSpan.FromSeconds(180));
+        _cts.CancelAfter(TimeSpan.FromSeconds(150));
         try
         {
             result = await ClaudeService.AskAsync(payload, _workingDir, _sessionId, _firstSent, _cts.Token);
@@ -88,6 +94,12 @@ public partial class AskClaudeWindow : System.Windows.Window
         {
             AppendTurn("Claude", result.Text);
             _firstSent = true;
+        }
+        else if (result.Cancelled)
+        {
+            AppendTurn("⚠", _userStopped
+                ? "Stopped."
+                : "Timed out — no response from claude. Run `claude -p \"hi\"` once in a terminal to confirm it's installed and signed in.");
         }
         else
         {
