@@ -124,6 +124,25 @@ public partial class VaultWindow : System.Windows.Window
         }
     }
 
+    private AskClaudeWindow? _askWindow;
+
+    private void AskButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_askWindow != null)
+        {
+            _askWindow.Close();
+            _askWindow = null;
+        }
+
+        StorageService.EnsureVaultReadme();
+        StorageService.RegenerateVaultIndex();
+
+        _askWindow = new AskClaudeWindow("vault", StorageService.GetVaultFolder());
+        _askWindow.Closed += (_, _) => _askWindow = null;
+        _askWindow.Show();
+        _askWindow.Activate();
+    }
+
     private void DeleteButton_Click(object sender, RoutedEventArgs e)
     {
         if (Selected is not { } thought)

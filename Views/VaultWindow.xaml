@@ -350,6 +350,10 @@
                                MaxWidth="320"
                                HorizontalAlignment="Left"/>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button x:Name="AskButton"
+                                Content="✦ Ask Claude"
+                                Style="{StaticResource ActionButton}"
+                                Click="AskButton_Click"/>
                         <Button x:Name="LoadButton"
                                 Content="Load into Pad"
                                 Style="{StaticResource ActionButton}"

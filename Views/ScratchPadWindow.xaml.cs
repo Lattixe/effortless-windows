@@ -20,6 +20,7 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
     private readonly TaskViewModel? _viewModel;
     private readonly DispatcherTimer _statusTimer;
     private VaultWindow? _vaultWindow;
+    private AskClaudeWindow? _askWindow;
     private string _noteText = string.Empty;
     private double _editorFontSize = DefaultFontSize;
 
@@ -107,6 +108,21 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
     {
         VaultPad(NoteEditor.Text, explicitTitle: null);
         NoteEditor.Focus();
+    }
+
+    private void AskButton_Click(object sender, RoutedEventArgs e)
+    {
+        // Fresh conversation each time so it reflects the current pad content.
+        if (_askWindow != null)
+        {
+            _askWindow.Close();
+            _askWindow = null;
+        }
+
+        _askWindow = new AskClaudeWindow("scratch pad", StorageService.GetScratchPadFolder(), NoteEditor.Text);
+        _askWindow.Closed += (_, _) => _askWindow = null;
+        _askWindow.Show();
+        _askWindow.Activate();
     }
 
     private void BrowseButton_Click(object sender, RoutedEventArgs e) => OpenVaultBrowser();

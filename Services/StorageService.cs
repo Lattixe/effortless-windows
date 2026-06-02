@@ -158,6 +158,8 @@ public static class StorageService
 
     public static string GetVaultIndexFile() => VaultIndexFile;
 
+    public static string GetScratchPadFolder() => ScratchPadFolder;
+
     /// <summary>
     /// Persist the given content as a new thought and refresh the vault index.
     /// Returns the created thought (with FilePath populated), or null when the

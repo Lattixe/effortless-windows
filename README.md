@@ -105,6 +105,32 @@ Because it's plain markdown, you can point Claude Code (or any LLM) at the folde
 and ask things like *"read index.md and summarize the themes across my thoughts"*
 or *"turn the thought titled X into a spec."*
 
+## Ask Claude (prompt against your notes)
+
+If you have the [Claude Code](https://claude.ai/code) CLI installed, you can prompt
+against your notes without leaving the app:
+
+- **✦ Ask** in the scratch pad — asks about the current pad's contents.
+- **✦ Ask Claude** in the Vault Browser — asks across your whole vault.
+
+It runs the CLI headlessly (`claude -p`) with **read-only** access (Read/Grep/Glob
+only — it can read your notes but never edits or runs commands), and keeps the
+conversation so you can ask follow-ups. The prompt is sent over stdin, so your
+notes can contain anything.
+
+Configure it in `%LOCALAPPDATA%\Effortless\settings.json`:
+
+```json
+{
+  "ClaudeCommand": "claude",
+  "ClaudeModel": ""
+}
+```
+
+- `ClaudeCommand` — defaults to `claude` (must be on PATH). Use a full path, or
+  `"wsl claude"` if Claude Code lives in WSL.
+- `ClaudeModel` — optional alias/id (e.g. `"opus"`); empty uses the CLI default.
+
 ## Installation
 
 ### Quick Install (Recommended)
