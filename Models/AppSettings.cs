@@ -5,6 +5,9 @@ public class AppSettings
 {
     public double ScratchPadFontSize { get; set; } = 14;
 
+    /// <summary>True for dark theme (the original "lights out" look), false for light.</summary>
+    public bool IsDarkMode { get; set; } = true;
+
     /// <summary>
     /// Command used to invoke the Claude Code CLI for "Ask Claude". Defaults to
     /// "claude" (must be on PATH). Set to a full path, or e.g. "wsl claude" if

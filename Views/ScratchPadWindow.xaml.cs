@@ -57,10 +57,30 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
         Loaded += (_, _) =>
         {
             NoteEditor.Focus();
+            UpdateThemeGlyph();
         };
+
+        // Keep the toggle glyph in sync when the theme changes from anywhere.
+        ThemeService.Changed += OnThemeChanged;
+        Unloaded += (_, _) => ThemeService.Changed -= OnThemeChanged;
 
         // Save on text change
         NoteEditor.TextChanged += (_, _) => StorageService.SaveScratchPad(_noteText);
+    }
+
+    private void OnThemeChanged(object? sender, EventArgs e) => UpdateThemeGlyph();
+
+    private void UpdateThemeGlyph()
+    {
+        // Show the destination state: ☀ when currently dark (click for light),
+        // ☾ when currently light (click for dark).
+        ThemeToggleGlyph.Text = ThemeService.IsDark ? "☀" : "☾";
+    }
+
+    private void ThemeToggle_Click(object sender, RoutedEventArgs e)
+    {
+        ThemeService.Toggle();
+        ShowStatus(ThemeService.IsDark ? "Dark mode" : "Light mode");
     }
 
     public string NoteText

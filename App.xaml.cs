@@ -20,6 +20,10 @@ public partial class App : System.Windows.Application
     {
         base.OnStartup(e);
 
+        // Apply the saved theme (dark by default) before any windows are
+        // constructed so DynamicResource lookups resolve immediately.
+        ThemeService.ApplyFromSettings();
+
         // Create the shared view model
         _viewModel = new TaskViewModel();
 
@@ -62,6 +66,7 @@ public partial class App : System.Windows.Application
         _trayService.ToggleListRequested += (_, _) => ToggleTaskList();
         _trayService.ToggleScratchPadRequested += (_, _) => ToggleScratchPad();
         _trayService.OpenVaultRequested += (_, _) => _scratchPadWindow?.OpenVaultBrowser();
+        _trayService.ToggleThemeRequested += (_, _) => ThemeService.Toggle();
         _trayService.ExitRequested += (_, _) => Shutdown();
 
         // Setup global hotkeys

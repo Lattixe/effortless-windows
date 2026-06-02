@@ -15,6 +15,7 @@ public class TrayIconService : IDisposable
     public event EventHandler? ToggleListRequested;
     public event EventHandler? ToggleScratchPadRequested;
     public event EventHandler? OpenVaultRequested;
+    public event EventHandler? ToggleThemeRequested;
     public event EventHandler? ExitRequested;
 
     public TrayIconService(TaskViewModel viewModel)
@@ -71,6 +72,12 @@ public class TrayIconService : IDisposable
         var pauseItem = new ToolStripMenuItem("Pause/Resume (Ctrl+Alt+Space)");
         pauseItem.Click += (_, _) => _viewModel.TogglePause();
         menu.Items.Add(pauseItem);
+
+        menu.Items.Add(new ToolStripSeparator());
+
+        var themeItem = new ToolStripMenuItem("Toggle Light/Dark");
+        themeItem.Click += (_, _) => ToggleThemeRequested?.Invoke(this, EventArgs.Empty);
+        menu.Items.Add(themeItem);
 
         menu.Items.Add(new ToolStripSeparator());
 

@@ -12,15 +12,15 @@
         SizeToContent="WidthAndHeight"
         MouseLeftButtonDown="Window_MouseLeftButtonDown">
 
-    <Border Background="#1a1a1a"
+    <Border Background="{DynamicResource PanelBackgroundBrush}"
             CornerRadius="6"
             Padding="12,6"
-            BorderBrush="#333333"
+            BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="1">
         <StackPanel Orientation="Horizontal">
             <!-- Task name -->
             <TextBlock Text="{Binding TaskName}"
-                       Foreground="#ffffff"
+                       Foreground="{DynamicResource TextPrimaryBrush}"
                        FontFamily="Segoe UI"
                        FontSize="13"
                        FontWeight="SemiBold"
@@ -30,7 +30,7 @@
 
             <!-- Timer -->
             <TextBlock Text="{Binding TimerDisplay}"
-                       Foreground="#EF5350"
+                       Foreground="{DynamicResource AccentRedBrush}"
                        FontFamily="Consolas"
                        FontSize="13"
                        FontWeight="Bold"
@@ -40,7 +40,7 @@
 
             <!-- Pause indicator -->
             <TextBlock Text="⏸"
-                       Foreground="#888888"
+                       Foreground="{DynamicResource TextMutedBrush}"
                        FontSize="11"
                        VerticalAlignment="Center"
                        Margin="4,0,0,0"
