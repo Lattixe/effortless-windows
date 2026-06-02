@@ -14,6 +14,7 @@ public class TrayIconService : IDisposable
 
     public event EventHandler? ToggleListRequested;
     public event EventHandler? ToggleScratchPadRequested;
+    public event EventHandler? OpenVaultRequested;
     public event EventHandler? ExitRequested;
 
     public TrayIconService(TaskViewModel viewModel)
@@ -52,6 +53,10 @@ public class TrayIconService : IDisposable
         var scratchPadItem = new ToolStripMenuItem("Toggle Scratch Pad (Ctrl+Alt+P)");
         scratchPadItem.Click += (_, _) => ToggleScratchPadRequested?.Invoke(this, EventArgs.Empty);
         menu.Items.Add(scratchPadItem);
+
+        var vaultItem = new ToolStripMenuItem("Thought Vault");
+        vaultItem.Click += (_, _) => OpenVaultRequested?.Invoke(this, EventArgs.Empty);
+        menu.Items.Add(vaultItem);
 
         menu.Items.Add(new ToolStripSeparator());
 

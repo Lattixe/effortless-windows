@@ -15,6 +15,8 @@ A minimalist task timer for Windows. Focus on what matters.
 - **Smart Timer Parsing** - Add a number at the end to set minutes (e.g., `Deep work 45`)
 - **Dark Mode UI** - Pure black "lights out" design, easy on the eyes
 - **Scratch Pad** - Quick notes that persist across sessions
+- **Slash Commands** - Turn a scratch-pad line into a task (`/read 30`) or vault a thought (`/vault`)
+- **Thought Vault** - Capture an idea, file it as an agent-native markdown wiki, start fresh
 - **Global Hotkeys** - Control everything without touching your mouse
 - **System Tray** - Lives quietly in your notification area
 
@@ -62,6 +64,44 @@ A minimalist task timer for Windows. Focus on what matters.
 5. Press `Ctrl+Alt+D` when done to move to the next task
 6. Timer notifications alert you when time's up
 
+## Scratch Pad & Slash Commands
+
+Open the scratch pad with `Ctrl+Alt+P` for free-form capture. At the start of any
+line, type a slash command and press **Enter**:
+
+| Command | Action |
+|---------|--------|
+| `/<task> <minutes>` | Add a task to the timer queue, e.g. `/read 30`. The line becomes `- [ ] read 30`. |
+| `/vault` | File the whole pad as a thought in the vault, then clear the pad for a fresh idea. |
+| `/vault <title>` | Same, but with an explicit title instead of the auto-derived one. |
+
+The scratch-pad title bar also has **⬇ Vault**, **☰ Vault Browser**, and an
+open-folder button.
+
+## Thought Vault
+
+The vault turns fleeting scratch-pad ideas into a durable, **agent-native markdown
+knowledge base** — a personal "Karpathy wiki" you can prompt against.
+
+- Each vaulted thought is a standalone `.md` file with YAML frontmatter
+  (`title`, `id`, `created`, `tags`).
+- An `index.md` catalog is regenerated automatically on every change.
+- A `README.md` explains the structure to any AI agent you point at the folder.
+- Everything lives in `Documents\Effortless Vault\` so it's easy to find, sync,
+  back up, and query.
+
+```
+Documents\Effortless Vault\
+├── README.md          ← how to use / query the vault (for humans and agents)
+├── index.md           ← auto-generated catalog of every thought
+└── thoughts\
+    └── 2026-06-02-product-catalog.md
+```
+
+Because it's plain markdown, you can point Claude Code (or any LLM) at the folder
+and ask things like *"read index.md and summarize the themes across my thoughts"*
+or *"turn the thought titled X into a spec."*
+
 ## Installation
 
 ### Quick Install (Recommended)
@@ -97,11 +137,19 @@ powershell -ExecutionPolicy Bypass -File install.ps1
 
 ## Data Storage
 
-Tasks and scratch pad notes are saved to:
+Tasks and the active scratch pad are saved to:
 ```
 %LOCALAPPDATA%\Effortless\
 ├── tasks.json
-└── scratchpad.txt
+└── ScratchPad\current.md
+```
+
+Vaulted thoughts live in your Documents folder so they're easy to find and sync:
+```
+Documents\Effortless Vault\
+├── README.md
+├── index.md
+└── thoughts\*.md
 ```
 
 ## Philosophy

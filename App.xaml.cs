@@ -59,6 +59,7 @@ public partial class App : System.Windows.Application
         _trayService = new TrayIconService(_viewModel);
         _trayService.ToggleListRequested += (_, _) => ToggleTaskList();
         _trayService.ToggleScratchPadRequested += (_, _) => ToggleScratchPad();
+        _trayService.OpenVaultRequested += (_, _) => _scratchPadWindow?.OpenVaultBrowser();
         _trayService.ExitRequested += (_, _) => Shutdown();
 
         // Setup global hotkeys
