@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using Effortless.Models;
 using Effortless.Services;
 
@@ -53,6 +54,31 @@ public partial class VaultWindow : System.Windows.Window
     {
         if (Selected != null)
             LoadSelected();
+    }
+
+    // WPF's default ListBox wheel-scroll can stall when the ItemsPanel's
+    // virtualizer thinks it's at the boundary even though the inner
+    // ScrollViewer isn't. Walk the visual tree to the real ScrollViewer and
+    // drive it directly, which scrolls reliably by pixels.
+    private void ThoughtList_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (FindScrollViewer(ThoughtList) is { } sv)
+        {
+            sv.ScrollToVerticalOffset(sv.VerticalOffset - e.Delta / 3.0);
+            e.Handled = true;
+        }
+    }
+
+    private static ScrollViewer? FindScrollViewer(DependencyObject root)
+    {
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is ScrollViewer sv) return sv;
+            var nested = FindScrollViewer(child);
+            if (nested != null) return nested;
+        }
+        return null;
     }
 
     private void UpdateDetail()

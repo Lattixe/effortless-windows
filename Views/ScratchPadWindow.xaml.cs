@@ -64,8 +64,29 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
         ThemeService.Changed += OnThemeChanged;
         Unloaded += (_, _) => ThemeService.Changed -= OnThemeChanged;
 
-        // Save on text change
-        NoteEditor.TextChanged += (_, _) => StorageService.SaveScratchPad(_noteText);
+        // Save on every text change. We read NoteEditor.Text directly rather
+        // than _noteText so we never depend on the binding push order.
+        NoteEditor.TextChanged += (_, _) => StorageService.SaveScratchPad(NoteEditor.Text);
+
+        // If what we just loaded from disk happens to match a vaulted thought
+        // exactly, mark it as already-vaulted so the next ⬇ Vault doesn't
+        // create a duplicate. Handles the load-thought → close-app → reopen →
+        // hit-Vault sequence.
+        if (!string.IsNullOrWhiteSpace(_noteText))
+        {
+            try
+            {
+                var snapshot = _noteText.Trim();
+                var match = StorageService.LoadVaultThoughts()
+                    .FirstOrDefault(t => t.Content.Trim() == snapshot);
+                if (match != null)
+                    _vaultedSnapshot = _noteText;
+            }
+            catch
+            {
+                // best effort — duplicate detection is a UX nicety
+            }
+        }
     }
 
     // Segoe Fluent Icons / MDL2 Assets glyphs (private-use codepoints).
@@ -134,6 +155,8 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
         NoteEditor.Focus();
     }
 
+    private string? _askSnapshotDir;
+
     private void AskButton_Click(object sender, RoutedEventArgs e)
     {
         // Fresh conversation each time so it reflects the current pad content.
@@ -142,17 +165,50 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
             _askWindow.Close();
             _askWindow = null;
         }
+        CleanupAskSnapshot();
 
-        // Run Claude with the vault folder as its working dir (same as the
-        // Vault Browser path — known to work). The pad's content is passed
-        // inline, and Claude can also reach for other vaulted thoughts if a
-        // follow-up question references them.
-        StorageService.EnsureVaultReadme();
+        // Snapshot the pad to a fresh temp folder and run Claude there.
+        // Letting Claude read scratch-pad.md via its Read tool is far more
+        // reliable than stuffing the pad's contents into the prompt — the
+        // prompt stays small (so it can't time out on big pads), and pad
+        // text that looks like slash commands ("/read 30") never enters
+        // Claude's prompt-parsing path.
+        var dir = Path.Combine(
+            Path.GetTempPath(),
+            "Effortless-Ask-" + Guid.NewGuid().ToString("N")[..8]);
 
-        _askWindow = new AskClaudeWindow("scratch pad", StorageService.GetVaultFolder(), NoteEditor.Text);
-        _askWindow.Closed += (_, _) => _askWindow = null;
+        try
+        {
+            Directory.CreateDirectory(dir);
+            File.WriteAllText(Path.Combine(dir, "scratch-pad.md"), NoteEditor.Text ?? string.Empty);
+            _askSnapshotDir = dir;
+        }
+        catch
+        {
+            ShowStatus("Couldn't snapshot pad for Ask", isError: true);
+            return;
+        }
+
+        const string directive =
+            "The file `scratch-pad.md` in your working directory is the user's current " +
+            "scratch pad. Read it before answering anything about \"the scratch pad\", " +
+            "\"my notes\", or \"this pad\".";
+
+        _askWindow = new AskClaudeWindow("scratch pad", dir, directive);
+        _askWindow.Closed += (_, _) =>
+        {
+            _askWindow = null;
+            CleanupAskSnapshot();
+        };
         _askWindow.Show();
         _askWindow.Activate();
+    }
+
+    private void CleanupAskSnapshot()
+    {
+        if (_askSnapshotDir is null) return;
+        try { Directory.Delete(_askSnapshotDir, recursive: true); } catch { /* best effort */ }
+        _askSnapshotDir = null;
     }
 
     private void BrowseButton_Click(object sender, RoutedEventArgs e) => OpenVaultBrowser();
@@ -293,6 +349,22 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
             return null;
         }
 
+        // Skip the duplicate when the pad is identical to what we last loaded
+        // from (or saved to) the vault — just clear without creating another
+        // .md file. Bypass the skip when the user supplied an explicit title
+        // (then they're intentionally forking).
+        if (string.IsNullOrWhiteSpace(explicitTitle) &&
+            !string.IsNullOrWhiteSpace(_vaultedSnapshot) &&
+            content.Trim() == _vaultedSnapshot.Trim())
+        {
+            NoteEditor.Clear();
+            StorageService.SaveScratchPad(string.Empty);
+            _vaultedSnapshot = string.Empty;
+            _vaultWindow?.RefreshThoughts();
+            ShowStatus("Already vaulted · pad cleared");
+            return null;
+        }
+
         var thought = StorageService.SaveThought(content, explicitTitle);
         if (thought == null)
         {
@@ -354,7 +426,7 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
     {
         // Hide instead of close, save content
         e.Cancel = true;
-        StorageService.SaveScratchPad(_noteText);
+        StorageService.SaveScratchPad(NoteEditor.Text);
         Hide();
     }
 

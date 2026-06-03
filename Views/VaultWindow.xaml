@@ -237,10 +237,12 @@
                              BorderThickness="0"
                              Foreground="{DynamicResource TextPrimaryBrush}"
                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto"
                              HorizontalContentAlignment="Stretch"
                              ItemContainerStyle="{StaticResource ThoughtItem}"
                              SelectionChanged="ThoughtList_SelectionChanged"
-                             MouseDoubleClick="ThoughtList_MouseDoubleClick">
+                             MouseDoubleClick="ThoughtList_MouseDoubleClick"
+                             PreviewMouseWheel="ThoughtList_PreviewMouseWheel">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <StackPanel>

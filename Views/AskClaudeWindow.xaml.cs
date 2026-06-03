@@ -62,11 +62,12 @@ public partial class AskClaudeWindow : System.Windows.Window
         if (string.IsNullOrWhiteSpace(question))
             return;
 
-        // Include the live note text with the first question only; subsequent
-        // turns resume the session, which already has it.
+        // Prepend the first-turn prefix (e.g. a directive that tells Claude
+        // where to find the user's notes) only on the first turn — later
+        // turns resume the session and already have that context.
         var payload = question;
         if (!_firstSent && !string.IsNullOrWhiteSpace(_inlineContext))
-            payload = $"{question}\n\n----- {_contextLabel} contents -----\n{_inlineContext}";
+            payload = $"{_inlineContext}\n\n{question}";
 
         AppendTurn("You", question);
         PromptBox.Clear();
