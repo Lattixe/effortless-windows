@@ -8,13 +8,25 @@ public class AppSettings
     /// <summary>True for dark theme (the original "lights out" look), false for light.</summary>
     public bool IsDarkMode { get; set; } = true;
 
-    /// <summary>
-    /// Command used to invoke the Claude Code CLI for "Ask Claude". Defaults to
-    /// "claude" (must be on PATH). Set to a full path, or e.g. "wsl claude" if
-    /// Claude Code lives in WSL.
-    /// </summary>
+    // -------- Ask providers --------
+    // Each provider's Command must resolve on PATH (or be a full path / "wsl <cmd>"
+    // form). Set the Command to "" to hide a provider from the Ask switcher.
+
+    /// <summary>Claude Code CLI command. Default "claude".</summary>
     public string ClaudeCommand { get; set; } = "claude";
 
-    /// <summary>Optional model alias/id for Ask Claude. Empty = the CLI default.</summary>
+    /// <summary>Optional model alias/id for Claude. Empty = the CLI default.</summary>
     public string ClaudeModel { get; set; } = "";
+
+    /// <summary>Hermes CLI command. Default "hermes" (set to "" to hide).</summary>
+    public string HermesCommand { get; set; } = "hermes";
+
+    /// <summary>
+    /// Extra args passed to the Hermes CLI before the prompt (which is sent on
+    /// stdin). Adjust this if Hermes needs specific flags — e.g. "ask --quiet".
+    /// </summary>
+    public string HermesArgs { get; set; } = "";
+
+    /// <summary>Last-used provider id in the Ask window (e.g. "claude" or "hermes").</summary>
+    public string LastAskProvider { get; set; } = "claude";
 }

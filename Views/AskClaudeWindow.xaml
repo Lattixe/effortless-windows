@@ -145,7 +145,7 @@
                     MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
                 <Grid>
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="✦ Ask Claude"
+                        <TextBlock Text="✦ Ask"
                                    Foreground="{DynamicResource TextSecondaryBrush}"
                                    FontFamily="Segoe UI"
                                    FontSize="11"
@@ -159,8 +159,24 @@
                                    Margin="8,0,0,0"
                                    VerticalAlignment="Center"/>
                     </StackPanel>
-                    <Button HorizontalAlignment="Right"
-                            Click="CloseButton_Click"
+                    <StackPanel Orientation="Horizontal"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Center">
+                        <ComboBox x:Name="ProviderCombo"
+                                  SelectionChanged="ProviderCombo_SelectionChanged"
+                                  DisplayMemberPath="Label"
+                                  Width="92"
+                                  Height="22"
+                                  FontFamily="Segoe UI"
+                                  FontSize="11"
+                                  Margin="0,0,6,0"
+                                  Padding="6,0"
+                                  VerticalContentAlignment="Center"
+                                  Background="{DynamicResource SunkenBackgroundBrush}"
+                                  Foreground="{DynamicResource TextPrimaryBrush}"
+                                  BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                  ToolTip="Choose AI provider"/>
+                        <Button Click="CloseButton_Click"
                             Background="Transparent"
                             BorderThickness="0"
                             Padding="8,3"
@@ -188,6 +204,7 @@
                         </Button.Style>
                         <TextBlock Text="×" Foreground="{DynamicResource TextDimBrush}" FontSize="14" FontWeight="Bold"/>
                     </Button>
+                    </StackPanel>
                 </Grid>
             </Border>
 

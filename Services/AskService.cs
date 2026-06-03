@@ -3,10 +3,11 @@ using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Effortless.Models;
 
 namespace Effortless.Services;
 
-public sealed class ClaudeResult
+public sealed class AskResult
 {
     public bool Success { get; init; }
     public string Text { get; init; } = string.Empty;
@@ -15,38 +16,38 @@ public sealed class ClaudeResult
 }
 
 /// <summary>
-/// Runs the Claude Code CLI headlessly to "prompt against" the user's notes.
-///
-/// Design notes (verified against claude 2.x):
-/// - The prompt is written to a temp file and fed to the CLI via cmd's own
-///   <c>&lt; file</c> redirection. This avoids putting note text on the command
-///   line (no quoting) AND guarantees the CLI sees end-of-input, so it never
-///   waits for more stdin (a hang we hit when piping across the cmd.exe layer).
-/// - <c>--allowedTools Read,Grep,Glob</c> lets the model read files in the working
-///   directory without an interactive permission prompt, while edits/Bash stay
-///   blocked in headless mode.
-/// - A stable <c>--session-id</c> on the first call + <c>--resume</c> on later calls
-///   gives multi-turn follow-ups against the same context.
-/// - Launched through <c>cmd.exe /c</c> so an npm <c>claude.cmd</c> shim resolves.
+/// Runs a configured CLI AI provider headlessly. Generic over any provider
+/// described by an <see cref="AskProvider"/>: the prompt is staged to a temp
+/// file and fed via cmd's <c>&lt; file</c> redirection (avoids any command-line
+/// quoting issues and guarantees the CLI sees end-of-input), the process is
+/// launched through <c>cmd.exe /c</c> so npm shims like <c>claude.cmd</c>
+/// resolve, and stdout is returned.
 /// </summary>
-public static class ClaudeService
+public static class AskService
 {
-    public static async Task<ClaudeResult> AskAsync(
+    public static async Task<AskResult> AskAsync(
+        AskProvider provider,
         string prompt,
         string workingDir,
         string sessionId,
         bool resume,
         CancellationToken ct)
     {
-        var settings = StorageService.LoadSettings();
-        var claudeCmd = string.IsNullOrWhiteSpace(settings.ClaudeCommand)
-            ? "claude"
-            : settings.ClaudeCommand.Trim();
+        if (string.IsNullOrWhiteSpace(provider.Command))
+            return new AskResult
+            {
+                Success = false,
+                Error = $"{provider.Label} is not configured. Set its Command in settings.json."
+            };
 
-        var sessionFlag = resume ? $"--resume {sessionId}" : $"--session-id {sessionId}";
-        var modelFlag = string.IsNullOrWhiteSpace(settings.ClaudeModel)
-            ? string.Empty
-            : $"--model {settings.ClaudeModel.Trim()} ";
+        var args = provider.Args ?? string.Empty;
+        if (provider.SupportsSession && !string.IsNullOrWhiteSpace(sessionId))
+        {
+            var sessionPart = resume
+                ? $"{provider.ResumeArg} {sessionId}"
+                : $"{provider.SessionIdArg} {sessionId}";
+            args = string.IsNullOrWhiteSpace(args) ? sessionPart : $"{args} {sessionPart}";
+        }
 
         var promptFile = Path.Combine(Path.GetTempPath(), $"effortless-ask-{Guid.NewGuid():N}.txt");
 
@@ -56,13 +57,11 @@ public static class ClaudeService
         }
         catch (Exception ex)
         {
-            return new ClaudeResult { Success = false, Error = $"Could not stage prompt: {ex.Message}" };
+            return new AskResult { Success = false, Error = $"Could not stage prompt: {ex.Message}" };
         }
 
         // Prompt comes from the redirected file; the command line carries no note text.
-        var arguments =
-            $"/c {claudeCmd} -p --output-format text --allowedTools Read,Grep,Glob " +
-            $"{modelFlag}{sessionFlag} < \"{promptFile}\"";
+        var arguments = $"/c {provider.Command} {args} < \"{promptFile}\"";
 
         var psi = new ProcessStartInfo
         {
@@ -85,13 +84,13 @@ public static class ClaudeService
         catch (Exception ex)
         {
             TryDelete(promptFile);
-            return new ClaudeResult { Success = false, Error = $"Could not start Claude CLI: {ex.Message}" };
+            return new AskResult { Success = false, Error = $"Could not start {provider.Label}: {ex.Message}" };
         }
 
         if (process == null)
         {
             TryDelete(promptFile);
-            return new ClaudeResult { Success = false, Error = "Could not start Claude CLI." };
+            return new AskResult { Success = false, Error = $"Could not start {provider.Label}." };
         }
 
         try
@@ -105,36 +104,38 @@ public static class ClaudeService
             var stderr = (await stderrTask).Trim();
 
             if (process.ExitCode == 0 && stdout.Length > 0)
-                return new ClaudeResult { Success = true, Text = stdout };
+                return new AskResult { Success = true, Text = stdout };
 
             var error = stderr.Length > 0
                 ? stderr
-                : stdout.Length > 0 ? stdout : "Claude returned no output (exit code " + process.ExitCode + ").";
+                : stdout.Length > 0
+                    ? stdout
+                    : $"{provider.Label} returned no output (exit code {process.ExitCode}).";
 
             if (error.Contains("not recognized", StringComparison.OrdinalIgnoreCase) ||
                 error.Contains("cannot find", StringComparison.OrdinalIgnoreCase))
             {
-                error += "\n\nMake sure Claude Code is installed and on your PATH, or set " +
-                         "\"ClaudeCommand\" in settings.json (e.g. a full path, or \"wsl claude\").";
+                error += $"\n\nMake sure '{provider.Command}' is installed and on your PATH, " +
+                         "or set it explicitly in settings.json (e.g. a full path, or \"wsl <cmd>\").";
             }
             else if (error.Contains("login", StringComparison.OrdinalIgnoreCase) ||
                      error.Contains("auth", StringComparison.OrdinalIgnoreCase) ||
                      error.Contains("api key", StringComparison.OrdinalIgnoreCase))
             {
-                error += "\n\nClaude may not be authenticated. Run `claude` once in a terminal and sign in.";
+                error += $"\n\n{provider.Label} may not be authenticated. Run it once in a terminal and sign in.";
             }
 
-            return new ClaudeResult { Success = false, Error = error };
+            return new AskResult { Success = false, Error = error };
         }
         catch (OperationCanceledException)
         {
             TryKill(process);
-            return new ClaudeResult { Success = false, Cancelled = true, Error = "Cancelled." };
+            return new AskResult { Success = false, Cancelled = true, Error = "Cancelled." };
         }
         catch (Exception ex)
         {
             TryKill(process);
-            return new ClaudeResult { Success = false, Error = ex.Message };
+            return new AskResult { Success = false, Error = ex.Message };
         }
         finally
         {
@@ -150,10 +151,7 @@ public static class ClaudeService
             if (!process.HasExited)
                 process.Kill(entireProcessTree: true);
         }
-        catch
-        {
-            // best effort
-        }
+        catch { /* best effort */ }
     }
 
     private static void TryDelete(string path)

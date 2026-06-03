@@ -105,31 +105,39 @@ Because it's plain markdown, you can point Claude Code (or any LLM) at the folde
 and ask things like *"read index.md and summarize the themes across my thoughts"*
 or *"turn the thought titled X into a spec."*
 
-## Ask Claude (prompt against your notes)
+## Ask (prompt against your notes)
 
-If you have the [Claude Code](https://claude.ai/code) CLI installed, you can prompt
-against your notes without leaving the app:
+If you have a CLI-based AI tool installed — [Claude Code](https://claude.ai/code),
+Hermes, or another — you can prompt against your notes without leaving the app:
 
 - **✦ Ask** in the scratch pad — asks about the current pad's contents.
 - **✦ Ask Claude** in the Vault Browser — asks across your whole vault.
 
-It runs the CLI headlessly (`claude -p`) with **read-only** access (Read/Grep/Glob
-only — it can read your notes but never edits or runs commands), and keeps the
-conversation so you can ask follow-ups. The prompt is sent over stdin, so your
-notes can contain anything.
+The Ask window has a provider switcher in its title bar so you can pick **Claude**
+or **Hermes** (and your choice is remembered). Each provider runs headlessly with
+**read-only** access (where supported — Claude is restricted to Read/Grep/Glob),
+keeps a session so you can ask follow-ups, and receives the prompt over stdin so
+your notes can contain anything.
 
-Configure it in `%LOCALAPPDATA%\Effortless\settings.json`:
+Configure providers in `%LOCALAPPDATA%\Effortless\settings.json`:
 
 ```json
 {
   "ClaudeCommand": "claude",
-  "ClaudeModel": ""
+  "ClaudeModel": "",
+  "HermesCommand": "hermes",
+  "HermesArgs": "",
+  "LastAskProvider": "claude"
 }
 ```
 
-- `ClaudeCommand` — defaults to `claude` (must be on PATH). Use a full path, or
-  `"wsl claude"` if Claude Code lives in WSL.
-- `ClaudeModel` — optional alias/id (e.g. `"opus"`); empty uses the CLI default.
+- `ClaudeCommand` / `HermesCommand` — defaults to the bare command name (must be on
+  PATH). Use a full path, or `"wsl <cmd>"` if the tool lives in WSL. Set to `""`
+  to hide that provider from the switcher.
+- `ClaudeModel` — optional alias/id for Claude (e.g. `"opus"`); empty uses the CLI default.
+- `HermesArgs` — extra args passed before the prompt; adjust if Hermes needs specific
+  flags (e.g. `"ask --quiet"`). The prompt itself is sent on stdin.
+- `LastAskProvider` — the provider id last chosen in the Ask window; saved automatically.
 
 ## Installation
 
