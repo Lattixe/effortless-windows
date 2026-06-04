@@ -167,15 +167,18 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
         }
         CleanupAskSnapshot();
 
-        // Snapshot the pad to a fresh temp folder and run Claude there.
-        // Letting Claude read scratch-pad.md via its Read tool is far more
-        // reliable than stuffing the pad's contents into the prompt — the
-        // prompt stays small (so it can't time out on big pads), and pad
-        // text that looks like slash commands ("/read 30") never enters
-        // Claude's prompt-parsing path.
+        // Snapshot the pad to a fresh per-Ask folder and run the provider
+        // there. Letting it read scratch-pad.md via its own Read tool is far
+        // more reliable than stuffing the pad's contents into the prompt — the
+        // prompt stays small (so it can't time out on big pads), and pad text
+        // that looks like slash commands ("/read 30") never enters the
+        // prompt-parsing path.
+        //
+        // The folder lives under the user profile (NOT %TEMP%, which is under
+        // AppData where Claude's project init misbehaves).
         var dir = Path.Combine(
-            Path.GetTempPath(),
-            "Effortless-Ask-" + Guid.NewGuid().ToString("N")[..8]);
+            StorageService.GetAskWorkspaceRoot(),
+            "pad-" + Guid.NewGuid().ToString("N")[..8]);
 
         try
         {

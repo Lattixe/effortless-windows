@@ -161,6 +161,20 @@ public static class StorageService
     public static string GetScratchPadFolder() => ScratchPadFolder;
 
     /// <summary>
+    /// Root for transient per-Ask working folders. Lives under the user profile
+    /// (e.g. C:\Users\me\.effortless\ask) rather than %TEMP% — CLIs like Claude
+    /// Code misbehave when their working directory is under hidden AppData.
+    /// </summary>
+    public static string GetAskWorkspaceRoot()
+    {
+        var root = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ".effortless", "ask");
+        try { Directory.CreateDirectory(root); } catch { /* best effort */ }
+        return root;
+    }
+
+    /// <summary>
     /// Persist the given content as a new thought and refresh the vault index.
     /// Returns the created thought (with FilePath populated), or null when the
     /// content is empty.

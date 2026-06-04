@@ -118,6 +118,18 @@ public static class AskService
                 error += $"\n\nMake sure '{provider.Command}' is installed and on your PATH, " +
                          "or set it explicitly in settings.json (e.g. a full path, or \"wsl <cmd>\").";
             }
+            else if (error.Contains("NoConsoleScreenBuffer", StringComparison.OrdinalIgnoreCase) ||
+                     error.Contains("No Windows console", StringComparison.OrdinalIgnoreCase) ||
+                     error.Contains("prompt_toolkit", StringComparison.OrdinalIgnoreCase) ||
+                     error.Contains("not a tty", StringComparison.OrdinalIgnoreCase) ||
+                     error.Contains("inappropriate ioctl", StringComparison.OrdinalIgnoreCase))
+            {
+                error = $"{provider.Label} launched its interactive terminal UI, which can't be " +
+                        "embedded (it needs a real console). It must be run in a non-interactive / " +
+                        $"headless mode instead.\n\nRun `{provider.Command} --help` to find a one-shot " +
+                        "flag (e.g. a 'run', 'ask', '--print', or '--prompt' option), then set it as " +
+                        $"that provider's args in settings.json.\n\nOriginal error:\n{Truncate(error, 600)}";
+            }
             else if (error.Contains("login", StringComparison.OrdinalIgnoreCase) ||
                      error.Contains("auth", StringComparison.OrdinalIgnoreCase) ||
                      error.Contains("api key", StringComparison.OrdinalIgnoreCase))
@@ -158,4 +170,7 @@ public static class AskService
     {
         try { File.Delete(path); } catch { /* best effort */ }
     }
+
+    private static string Truncate(string value, int max) =>
+        value.Length <= max ? value : value[..max] + "…";
 }
