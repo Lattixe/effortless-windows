@@ -215,6 +215,43 @@ public static class StorageService
         }
     }
 
+    /// <summary>
+    /// Overwrites an existing thought's file in place with new content,
+    /// preserving its Id, Created date, tags, and filename. The title in the
+    /// frontmatter is re-derived from the new content. Returns the updated
+    /// thought, or null on failure.
+    /// </summary>
+    public static VaultThought? UpdateThought(VaultThought existing, string content)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+            return null;
+
+        try
+        {
+            // If the underlying file vanished, fall back to creating a new one.
+            if (string.IsNullOrEmpty(existing.FilePath) || !File.Exists(existing.FilePath))
+                return SaveThought(content);
+
+            var updated = new VaultThought
+            {
+                Id = existing.Id,
+                Created = existing.Created,
+                Tags = existing.Tags,
+                Title = DeriveTitle(content),
+                FilePath = existing.FilePath,
+                Content = content.Replace("\r\n", "\n").TrimEnd() + "\n"
+            };
+
+            File.WriteAllText(updated.FilePath, SerializeThought(updated));
+            RegenerateVaultIndex();
+            return updated;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     public static List<VaultThought> LoadVaultThoughts()
     {
         var result = new List<VaultThought>();

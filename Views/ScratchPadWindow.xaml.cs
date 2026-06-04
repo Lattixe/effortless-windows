@@ -29,6 +29,11 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
     // thoughts when simply navigating the vault).
     private string _vaultedSnapshot = string.Empty;
 
+    // The vault thought the pad is currently an editing session of (loaded from
+    // the vault, or matched on startup). When set, ⬇ Vault updates that note in
+    // place instead of creating a new one.
+    private VaultThought? _loadedThought;
+
     public event PropertyChangedEventHandler? PropertyChanged;
     public event EventHandler<string>? ThoughtVaulted;
 
@@ -80,7 +85,10 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
                 var match = StorageService.LoadVaultThoughts()
                     .FirstOrDefault(t => t.Content.Trim() == snapshot);
                 if (match != null)
+                {
                     _vaultedSnapshot = _noteText;
+                    _loadedThought = match;
+                }
             }
             catch
             {
@@ -352,63 +360,98 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
             return null;
         }
 
-        // Skip the duplicate when the pad is identical to what we last loaded
-        // from (or saved to) the vault — just clear without creating another
-        // .md file. Bypass the skip when the user supplied an explicit title
-        // (then they're intentionally forking).
-        if (string.IsNullOrWhiteSpace(explicitTitle) &&
+        var keepingTitle = string.IsNullOrWhiteSpace(explicitTitle);
+
+        // Unchanged since it was loaded/saved — just clear, don't write again.
+        if (keepingTitle &&
             !string.IsNullOrWhiteSpace(_vaultedSnapshot) &&
             content.Trim() == _vaultedSnapshot.Trim())
         {
-            NoteEditor.Clear();
-            StorageService.SaveScratchPad(string.Empty);
-            _vaultedSnapshot = string.Empty;
+            ResetPad();
             _vaultWindow?.RefreshThoughts();
             ShowStatus("Already vaulted · pad cleared");
             return null;
         }
 
-        var thought = StorageService.SaveThought(content, explicitTitle);
+        VaultThought? thought;
+        var updated = false;
+
+        // If the pad is an editing session of a vaulted thought (and the user
+        // didn't force a new title via /vault <title>), update that note in
+        // place instead of creating a duplicate.
+        if (_loadedThought != null && keepingTitle)
+        {
+            thought = StorageService.UpdateThought(_loadedThought, content);
+            updated = thought != null;
+        }
+        else
+        {
+            thought = StorageService.SaveThought(content, explicitTitle);
+        }
+
         if (thought == null)
         {
             ShowStatus("Couldn't vault thought", isError: true);
             return null;
         }
 
-        // Start fresh
-        NoteEditor.Clear();
-        StorageService.SaveScratchPad(string.Empty);
-        _vaultedSnapshot = string.Empty;
-
+        ResetPad();
         _vaultWindow?.RefreshThoughts();
-        ShowStatus($"Vaulted: {thought.Title}");
+        ShowStatus(updated ? $"Updated: {thought.Title}" : $"Vaulted: {thought.Title}");
         return thought;
     }
 
+    // Clear the pad and forget which thought it came from (fresh start).
+    private void ResetPad()
+    {
+        NoteEditor.Clear();
+        StorageService.SaveScratchPad(string.Empty);
+        _vaultedSnapshot = string.Empty;
+        _loadedThought = null;
+    }
+
     /// <summary>
-    /// Loads a vaulted thought back into the pad. Genuinely-unsaved edits in the
-    /// pad are stashed to the vault first so nothing is ever lost — but simply
-    /// navigating between thoughts never creates duplicates.
+    /// Loads a vaulted thought back into the pad. Genuinely-unsaved edits are
+    /// committed first so nothing is lost: edits to a previously-loaded thought
+    /// update it in place, while fresh content is stashed as a new thought.
     /// </summary>
     public void LoadThoughtIntoPad(VaultThought thought)
     {
         var current = NoteEditor.Text;
-        var stashed = false;
+        string? committed = null;
+        var target = thought;   // the thought whose content we'll actually load
 
         var hasUnsavedEdits = !string.IsNullOrWhiteSpace(current)
             && current.Trim() != _vaultedSnapshot.Trim()
             && current.Trim() != thought.Content.Trim();
 
         if (hasUnsavedEdits)
-            stashed = StorageService.SaveThought(current) != null;
+        {
+            if (_loadedThought != null)
+            {
+                // Persist the edits to the thought we were editing.
+                if (StorageService.UpdateThought(_loadedThought, current) is { } u)
+                {
+                    if (_loadedThought.Id == thought.Id)
+                        target = u;                       // reloading the same note — keep edits
+                    else
+                        committed = $"saved “{u.Title}”"; // switching notes — note we saved the old one
+                }
+            }
+            else if (StorageService.SaveThought(current) != null)
+            {
+                committed = "stashed current";
+            }
+        }
 
-        NoteEditor.Text = thought.Content.TrimEnd();
+        NoteEditor.Text = target.Content.TrimEnd();
         NoteEditor.CaretIndex = NoteEditor.Text.Length;
         StorageService.SaveScratchPad(NoteEditor.Text);
         _vaultedSnapshot = NoteEditor.Text;
+        _loadedThought = target;
 
         _vaultWindow?.RefreshThoughts();
-        ShowStatus(stashed ? $"Stashed current · loaded: {thought.Title}" : $"Loaded: {thought.Title}");
+        ShowStatus(committed != null ? $"{committed} · loaded: {target.Title}" : $"Loaded: {target.Title}");
 
         Show();
         Activate();
