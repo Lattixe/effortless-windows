@@ -27,8 +27,16 @@ public static class StorageService
     );
 
     private static readonly string VaultThoughtsFolder = Path.Combine(VaultFolder, "thoughts");
+    private static readonly string VaultDailyFolder = Path.Combine(VaultFolder, "daily");
     private static readonly string VaultIndexFile = Path.Combine(VaultFolder, "index.md");
     private static readonly string VaultReadmeFile = Path.Combine(VaultFolder, "README.md");
+
+    // Obsidian-style inline hashtags: #tag, #nested/tag — must start with a
+    // letter (so markdown headers "# " and pure numbers don't match) and be
+    // preceded by whitespace or line start.
+    private static readonly System.Text.RegularExpressions.Regex HashtagPattern =
+        new(@"(?<!\S)#([A-Za-z][\w/-]*)",
+            System.Text.RegularExpressions.RegexOptions.Compiled);
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -158,6 +166,61 @@ public static class StorageService
 
     public static string GetVaultIndexFile() => VaultIndexFile;
 
+    public static string GetVaultDailyFolder() => VaultDailyFolder;
+
+    /// <summary>Pull Obsidian-style #hashtags out of note content, de-duplicated.</summary>
+    private static List<string> ExtractTags(string content)
+    {
+        var tags = new List<string>();
+        foreach (System.Text.RegularExpressions.Match m in HashtagPattern.Matches(content))
+        {
+            var tag = m.Groups[1].Value;
+            if (!tags.Contains(tag, StringComparer.OrdinalIgnoreCase))
+                tags.Add(tag);
+        }
+        return tags;
+    }
+
+    /// <summary>
+    /// Append a timestamped entry to today's daily note (daily/YYYY-MM-DD.md),
+    /// the Obsidian daily-note convention. Creates the file with frontmatter on
+    /// first write of the day. Returns the file path, or null if nothing/failed.
+    /// </summary>
+    public static string? AppendToDailyNote(string content)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+            return null;
+
+        try
+        {
+            Directory.CreateDirectory(VaultDailyFolder);
+            var now = DateTime.Now;
+            var file = Path.Combine(VaultDailyFolder, $"{now:yyyy-MM-dd}.md");
+            var body = content.Replace("\r\n", "\n").TrimEnd();
+
+            var sb = new StringBuilder();
+            if (!File.Exists(file))
+            {
+                sb.Append("---\n");
+                sb.Append($"date: {now:yyyy-MM-dd}\n");
+                sb.Append("type: daily\n");
+                sb.Append("tags: [daily]\n");
+                sb.Append("---\n\n");
+                sb.Append($"# {now:dddd, MMMM d, yyyy}\n");
+            }
+            sb.Append($"\n## {now:HH:mm}\n\n{body}\n");
+
+            File.AppendAllText(file, sb.ToString());
+            EnsureVaultReadme();
+            RegenerateVaultIndex();
+            return file;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     public static string GetScratchPadFolder() => ScratchPadFolder;
 
     /// <summary>
@@ -196,6 +259,7 @@ public static class StorageService
             {
                 Title = title,
                 Created = DateTime.Now,
+                Tags = ExtractTags(content),
                 Content = content.Replace("\r\n", "\n").TrimEnd() + "\n"
             };
 
@@ -236,7 +300,7 @@ public static class StorageService
             {
                 Id = existing.Id,
                 Created = existing.Created,
-                Tags = existing.Tags,
+                Tags = ExtractTags(content),
                 Title = DeriveTitle(content),
                 FilePath = existing.FilePath,
                 Content = content.Replace("\r\n", "\n").TrimEnd() + "\n"
@@ -301,8 +365,9 @@ public static class StorageService
             sb.Append("# 🧠 Thought Vault\n\n");
             sb.Append($"> Auto-generated catalog — {thoughts.Count} thought(s) captured.\n");
             sb.Append($"> Last updated {DateTime.Now:yyyy-MM-dd HH:mm}.\n\n");
-            sb.Append("Agent-native markdown knowledge base. See [`README.md`](README.md) ");
-            sb.Append("for how to query it.\n");
+            sb.Append("Agent-native markdown vault — also an [Obsidian](https://obsidian.md) ");
+            sb.Append("vault (open this folder in Obsidian). See [`README.md`](README.md) ");
+            sb.Append("for how to query it. Links below are `[[wikilinks]]` so the graph view connects.\n");
 
             if (thoughts.Count == 0)
             {
@@ -321,14 +386,33 @@ public static class StorageService
                         sb.Append($"\n## {t.Created:MMMM yyyy}\n\n");
                     }
 
-                    var rel = "thoughts/" + Path.GetFileName(t.FilePath);
+                    // Wikilink by basename (unique) with the title as display alias.
+                    // Sanitise the alias: '|' and ']' would break the wikilink.
+                    var name = Path.GetFileNameWithoutExtension(t.FilePath);
+                    var alias = t.Title.Replace("|", "/").Replace("]", ")").Replace("[", "(");
                     var tagStr = t.Tags.Count > 0
                         ? "  " + string.Join(" ", t.Tags.Select(tag => $"`#{tag}`"))
                         : "";
-                    sb.Append($"- **[{t.Title}]({EscapeLink(rel)})** — *{t.Created:yyyy-MM-dd}*{tagStr}\n");
+                    sb.Append($"- **[[{name}|{alias}]]** — *{t.Created:yyyy-MM-dd}*{tagStr}\n");
                     if (!string.IsNullOrWhiteSpace(t.Preview))
                         sb.Append($"  - {t.Preview}\n");
                 }
+            }
+
+            // Daily log section
+            var dailies = Directory.Exists(VaultDailyFolder)
+                ? Directory.EnumerateFiles(VaultDailyFolder, "*.md")
+                    .Select(Path.GetFileNameWithoutExtension)
+                    .Where(n => !string.IsNullOrEmpty(n))
+                    .OrderByDescending(n => n, StringComparer.Ordinal)
+                    .ToList()
+                : new List<string?>();
+
+            if (dailies.Count > 0)
+            {
+                sb.Append("\n## 📅 Daily log\n\n");
+                foreach (var d in dailies)
+                    sb.Append($"- [[{d}]]\n");
             }
 
             File.WriteAllText(VaultIndexFile, sb.ToString());
@@ -496,25 +580,37 @@ public static class StorageService
         return value;
     }
 
-    private static string EscapeLink(string value) => value.Replace(" ", "%20");
-
     private static string VaultReadmeContent()
     {
         return """
         # Effortless Thought Vault
 
-        This folder is an **agent-native markdown knowledge base** — a personal
-        wiki of captured thoughts. It is designed to be read by humans *and*
-        prompted against by AI agents (Claude Code, etc.).
+        This folder is an **agent-native markdown knowledge base** AND an
+        **Obsidian vault** — a personal wiki of captured thoughts. It's designed
+        to be browsed by you (in Obsidian), and prompted against by AI agents
+        (Claude Code, gbrain, etc.).
+
+        ## Open it in Obsidian
+
+        In Obsidian: **Open folder as vault** → pick this folder. Then:
+
+        - **Graph view** lights up from the `[[wikilinks]]` in `index.md` (and any
+          you add between notes).
+        - **Tags pane** is populated from `#hashtags` in your notes and the
+          `tags:` frontmatter.
+        - Point the **Daily Notes** plugin at the `daily/` folder (format
+          `YYYY-MM-DD`) to line up with the daily log Effortless writes.
 
         ## Structure
 
         ```
         Effortless Vault/
-        ├── README.md          ← you are here (how to use / query the vault)
-        ├── index.md           ← auto-generated catalog of every thought
-        └── thoughts/
-            └── YYYY-MM-DD-slug.md   ← one file per captured thought
+        ├── README.md          ← you are here
+        ├── index.md           ← auto-generated map of content (wikilinks)
+        ├── thoughts/
+        │   └── YYYY-MM-DD-slug.md   ← one file per captured thought
+        └── daily/
+            └── YYYY-MM-DD.md         ← timestamped daily log (/daily)
         ```
 
         ## Thought format
@@ -529,26 +625,30 @@ public static class StorageService
         tags: [ideas, product]
         ---
 
-        The body of the thought, exactly as captured in the scratch pad.
+        The body of the thought. Use #hashtags and [[wikilinks]] freely —
+        Effortless lifts #tags into the frontmatter, and Obsidian resolves both.
         ```
 
-        - `index.md` is regenerated automatically whenever a thought is added or
-          removed — never edit it by hand (your changes will be overwritten).
-        - Thought files are yours to edit freely; add tags, refine titles, link
-          between them with standard `[wiki](thoughts/other.md)` links.
+        - `index.md` is regenerated automatically — never edit it by hand.
+        - Thought files are yours: refine titles, add `#tags`, link notes with
+          `[[Other Note]]` to grow the graph.
+
+        ## Capture vocabulary (from the Effortless scratch pad)
+
+        - `/vault` — file the pad as a standalone thought in `thoughts/`.
+        - `/daily` — append the pad as a timestamped entry in today's daily note.
 
         ## Prompting against the vault (agent workflow)
 
-        Point an AI agent at this folder and ask it to reason over your thoughts:
+        Point an AI agent at this folder and ask it to reason over your notes:
 
         - "Read `index.md`, then summarize the themes across my thoughts."
         - "Search `thoughts/` for anything related to pricing and draft a plan."
-        - "Find duplicate or related ideas and suggest how to merge them."
+        - "Find related ideas and suggest `[[wikilinks]]` to connect them."
         - "Turn the thought titled X into a structured spec."
 
-        Because everything is plain markdown, no special tooling is required —
-        `cat`, `grep`, and ripgrep all work, and any LLM can ingest the files
-        directly.
+        Everything is plain markdown — `cat`, `grep`, ripgrep, Obsidian, and any
+        LLM all read it directly.
         """;
     }
 }

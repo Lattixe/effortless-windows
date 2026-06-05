@@ -77,6 +77,10 @@ line, type a slash command and press **Enter**:
 | `/<task> <minutes>` | Add a task to the timer queue, e.g. `/read 30`. The line becomes `- [ ] read 30`. |
 | `/vault` | File the whole pad as a thought in the vault, then clear the pad for a fresh idea. |
 | `/vault <title>` | Same, but with an explicit title instead of the auto-derived one. |
+| `/daily` | Append the whole pad as a timestamped entry in today's daily note, then clear. |
+
+Type `#hashtags` and `[[wikilinks]]` anywhere in your notes — they flow straight
+through to the vault and light up Obsidian's tags pane and graph view.
 
 The scratch-pad title bar also has **⬇ Vault**, **☰ Vault Browser**, and an
 open-folder button.
@@ -96,14 +100,25 @@ knowledge base** — a personal "Karpathy wiki" you can prompt against.
 ```
 Documents\Effortless Vault\
 ├── README.md          ← how to use / query the vault (for humans and agents)
-├── index.md           ← auto-generated catalog of every thought
-└── thoughts\
-    └── 2026-06-02-product-catalog.md
+├── index.md           ← auto-generated map of content (wikilinks)
+├── thoughts\
+│   └── 2026-06-02-product-catalog.md
+└── daily\
+    └── 2026-06-05.md  ← timestamped daily log (/daily)
 ```
 
 Because it's plain markdown, you can point Claude Code (or any LLM) at the folder
 and ask things like *"read index.md and summarize the themes across my thoughts"*
 or *"turn the thought titled X into a spec."*
+
+### Open it in Obsidian
+
+The vault folder *is* an Obsidian vault — in Obsidian, **Open folder as vault** and
+point it here. `#tags` populate the tags pane (Effortless also lifts them into each
+note's frontmatter), `[[wikilinks]]` in `index.md` and your notes drive the graph
+view, and the `daily/` folder lines up with Obsidian's Daily Notes plugin (format
+`YYYY-MM-DD`). One folder, three lenses: Effortless captures, Obsidian connects, an
+AI agent reasons.
 
 ## Ask (prompt against your notes)
 

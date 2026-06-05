@@ -338,6 +338,18 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
             return true;
         }
 
+        // /daily — append the whole pad as a timestamped entry in today's daily
+        // note, then start fresh (the running-log counterpart to /vault).
+        if (command.Equals("daily", StringComparison.OrdinalIgnoreCase))
+        {
+            var before = text[..lineStart];
+            var after = lineEnd < text.Length ? text[(lineEnd + 1)..] : string.Empty;
+            var content = (before + after).Trim();
+
+            DailyLogPad(content);
+            return true;
+        }
+
         // Otherwise: create a task (e.g. "/read 30") and leave a markdown record.
         if (_viewModel == null)
             return false;
@@ -408,6 +420,27 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
         StorageService.SaveScratchPad(string.Empty);
         _vaultedSnapshot = string.Empty;
         _loadedThought = null;
+    }
+
+    // Append the pad to today's daily note, then start fresh.
+    private void DailyLogPad(string content)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            ShowStatus("Nothing to log", isError: true);
+            return;
+        }
+
+        var file = StorageService.AppendToDailyNote(content);
+        if (file == null)
+        {
+            ShowStatus("Couldn't write daily note", isError: true);
+            return;
+        }
+
+        ResetPad();
+        _vaultWindow?.RefreshThoughts();
+        ShowStatus($"Logged to {System.IO.Path.GetFileNameWithoutExtension(file)}");
     }
 
     /// <summary>
