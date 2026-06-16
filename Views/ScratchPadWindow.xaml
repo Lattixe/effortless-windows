@@ -116,6 +116,62 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <!-- Formatting toolbar button -->
+        <Style x:Key="ToolbarButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="7,3"/>
+            <Setter Property="Margin" Value="1,0"/>
+            <Setter Property="MinWidth" Value="26"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource SunkenBackgroundBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Highlight color swatch -->
+        <Style x:Key="Swatch" TargetType="Button">
+            <Setter Property="Width" Value="18"/>
+            <Setter Property="Height" Value="18"/>
+            <Setter Property="Margin" Value="2,0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="9"
+                                BorderBrush="{DynamicResource BorderBrush}"
+                                BorderThickness="1"/>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="BorderBrush" Value="{DynamicResource TextMutedBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <Border Background="{DynamicResource WindowBackgroundBrush}"
@@ -132,6 +188,7 @@
 
         <Grid>
             <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
@@ -233,40 +290,70 @@
                 </Grid>
             </Border>
 
+            <!-- Formatting toolbar -->
+            <Border Grid.Row="1"
+                    Background="{DynamicResource ChromeBackgroundBrush}"
+                    BorderBrush="{DynamicResource BorderSubtleBrush}"
+                    BorderThickness="0,1,0,1"
+                    Padding="10,5">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Style="{StaticResource ToolbarButton}" Click="Bold_Click" ToolTip="Bold (Ctrl+B)">
+                        <TextBlock Text="B" FontWeight="Bold"/>
+                    </Button>
+                    <Button Style="{StaticResource ToolbarButton}" Click="Italic_Click" ToolTip="Italic (Ctrl+I)">
+                        <TextBlock Text="I" FontStyle="Italic"/>
+                    </Button>
+
+                    <Border Width="1" Margin="6,2" Background="{DynamicResource BorderBrush}"/>
+
+                    <TextBlock Text="Highlight"
+                               Foreground="{DynamicResource TextDimBrush}"
+                               FontFamily="Segoe UI" FontSize="11"
+                               VerticalAlignment="Center" Margin="2,0,4,0"/>
+                    <Button Style="{StaticResource Swatch}" Click="Highlight_Click" Tag="#FFF59D"
+                            Background="#FFF59D" ToolTip="Yellow"/>
+                    <Button Style="{StaticResource Swatch}" Click="Highlight_Click" Tag="#C8E6C9"
+                            Background="#C8E6C9" ToolTip="Green"/>
+                    <Button Style="{StaticResource Swatch}" Click="Highlight_Click" Tag="#BBDEFB"
+                            Background="#BBDEFB" ToolTip="Blue"/>
+                    <Button Style="{StaticResource Swatch}" Click="Highlight_Click" Tag="#F8BBD0"
+                            Background="#F8BBD0" ToolTip="Pink"/>
+                    <Button Style="{StaticResource ToolbarButton}" Click="ClearHighlight_Click"
+                            ToolTip="Remove highlight" Margin="4,0,0,0">
+                        <TextBlock Text="✕" FontSize="11"/>
+                    </Button>
+
+                    <Border Width="1" Margin="6,2" Background="{DynamicResource BorderBrush}"/>
+
+                    <Button Style="{StaticResource ToolbarButton}" Click="Task_Click" ToolTip="Toggle checkbox / task line">
+                        <TextBlock Text="☑ Task" FontSize="12"/>
+                    </Button>
+                </StackPanel>
+            </Border>
+
             <!-- Note content -->
-            <TextBox Grid.Row="1"
-                     x:Name="NoteEditor"
-                     Text="{Binding NoteText, UpdateSourceTrigger=PropertyChanged}"
-                     PreviewMouseWheel="NoteEditor_PreviewMouseWheel"
-                     Background="{DynamicResource WindowBackgroundBrush}"
-                     Foreground="{DynamicResource TextPrimaryBrush}"
-                     CaretBrush="{DynamicResource CaretBrush}"
-                     BorderThickness="0"
-                     Padding="16,12"
-                     FontFamily="Segoe UI"
-                     FontSize="{Binding EditorFontSize}"
-                     AcceptsReturn="True"
-                     TextWrapping="Wrap"
-                     VerticalScrollBarVisibility="Auto"
-                     HorizontalScrollBarVisibility="Disabled"
-                     VerticalAlignment="Stretch">
-                <TextBox.Style>
-                    <Style TargetType="TextBox">
-                        <Setter Property="Template">
-                            <Setter.Value>
-                                <ControlTemplate TargetType="TextBox">
-                                    <Border Background="{TemplateBinding Background}"
-                                            CornerRadius="0,0,8,8">
-                                        <ScrollViewer x:Name="PART_ContentHost"
-                                                      Style="{StaticResource DarkScrollViewer}"
-                                                      Padding="{TemplateBinding Padding}"/>
-                                    </Border>
-                                </ControlTemplate>
-                            </Setter.Value>
-                        </Setter>
+            <RichTextBox Grid.Row="2"
+                         x:Name="RichEditor"
+                         AcceptsReturn="True"
+                         AcceptsTab="True"
+                         Background="{DynamicResource WindowBackgroundBrush}"
+                         Foreground="{DynamicResource TextPrimaryBrush}"
+                         CaretBrush="{DynamicResource CaretBrush}"
+                         BorderThickness="0"
+                         Padding="16,12"
+                         FontFamily="Segoe UI"
+                         FontSize="{Binding EditorFontSize}"
+                         VerticalScrollBarVisibility="Auto"
+                         HorizontalScrollBarVisibility="Disabled"
+                         SpellCheck.IsEnabled="True"
+                         TextChanged="RichEditor_TextChanged">
+                <RichTextBox.Resources>
+                    <Style TargetType="ScrollBar" BasedOn="{StaticResource DarkScrollBar}"/>
+                    <Style TargetType="Paragraph">
+                        <Setter Property="Margin" Value="0"/>
                     </Style>
-                </TextBox.Style>
-            </TextBox>
+                </RichTextBox.Resources>
+            </RichTextBox>
         </Grid>
     </Border>
 </Window>

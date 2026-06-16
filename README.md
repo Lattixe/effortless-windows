@@ -82,6 +82,14 @@ line, type a slash command and press **Enter**:
 Type `#hashtags` and `[[wikilinks]]` anywhere in your notes — they flow straight
 through to the vault and light up Obsidian's tags pane and graph view.
 
+### Rich text
+
+The pad is a lightweight rich editor with a formatting toolbar: **bold** (Ctrl+B),
+*italic* (Ctrl+I), a highlighter with a few colors, and clickable **task
+checkboxes**. It's all stored as plain markdown under the hood — bold as `**`,
+italic as `*`, highlights as `==…==` / `<mark>`, and tasks as `- [ ]` / `- [x]` —
+so notes stay portable and Obsidian renders them identically.
+
 The scratch-pad title bar also has **⬇ Vault**, **☰ Vault Browser**, and an
 open-folder button.
 

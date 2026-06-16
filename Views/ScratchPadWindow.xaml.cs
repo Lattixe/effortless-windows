@@ -3,11 +3,18 @@ using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Threading;
 using Effortless.Models;
 using Effortless.Services;
 using Effortless.ViewModels;
+// Disambiguate WPF types from the WinForms/System.Drawing globals.
+using Color = System.Windows.Media.Color;
+using Brush = System.Windows.Media.Brush;
+using Brushes = System.Windows.Media.Brushes;
+using ColorConverter = System.Windows.Media.ColorConverter;
 
 namespace Effortless.Views;
 
@@ -17,21 +24,23 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
     private const double MaxFontSize = 40;
     private const double DefaultFontSize = 14;
 
+    // Segoe Fluent Icons / MDL2 Assets glyphs (private-use codepoints).
+    private const string SunGlyph = "\uE706";   // Brightness — sun with rays
+    private const string MoonGlyph = "\uE793";  // ClearNight — crescent moon
+
     private readonly TaskViewModel? _viewModel;
     private readonly DispatcherTimer _statusTimer;
     private VaultWindow? _vaultWindow;
     private AskClaudeWindow? _askWindow;
-    private string _noteText = string.Empty;
     private double _editorFontSize = DefaultFontSize;
+    private bool _suppressSave;
 
-    // Content snapshot of the last vaulted/loaded state, used to detect whether
-    // the pad holds genuinely-unsaved edits (so we never create duplicate
-    // thoughts when simply navigating the vault).
+    // Content snapshot of the last vaulted/loaded state (in serialized-markdown
+    // form), used to detect genuinely-unsaved edits so we never duplicate.
     private string _vaultedSnapshot = string.Empty;
 
-    // The vault thought the pad is currently an editing session of (loaded from
-    // the vault, or matched on startup). When set, ⬇ Vault updates that note in
-    // place instead of creating a new one.
+    // The vault thought the pad is currently an editing session of. When set,
+    // ⬇ Vault updates that note in place instead of creating a new one.
     private VaultThought? _loadedThought;
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -43,13 +52,13 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
         InitializeComponent();
         DataContext = this;
 
-        // Load saved note
-        _noteText = StorageService.LoadScratchPad();
-        OnPropertyChanged(nameof(NoteText));
-
-        // Restore the saved editor font size
+        // Restore the saved editor font size before loading the document.
         _editorFontSize = Math.Clamp(StorageService.LoadScratchPadFontSize(), MinFontSize, MaxFontSize);
         OnPropertyChanged(nameof(EditorFontSize));
+
+        // Load saved note into the rich editor.
+        var markdown = StorageService.LoadScratchPad();
+        SetMarkdown(markdown);
 
         _statusTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2.5) };
         _statusTimer.Tick += (_, _) =>
@@ -58,35 +67,27 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
             StatusText.Text = string.Empty;
         };
 
-        // Focus editor when loaded
         Loaded += (_, _) =>
         {
-            NoteEditor.Focus();
+            RichEditor.Focus();
             UpdateThemeGlyph();
         };
 
-        // Keep the toggle glyph in sync when the theme changes from anywhere.
         ThemeService.Changed += OnThemeChanged;
         Unloaded += (_, _) => ThemeService.Changed -= OnThemeChanged;
 
-        // Save on every text change. We read NoteEditor.Text directly rather
-        // than _noteText so we never depend on the binding push order.
-        NoteEditor.TextChanged += (_, _) => StorageService.SaveScratchPad(NoteEditor.Text);
-
-        // If what we just loaded from disk happens to match a vaulted thought
-        // exactly, mark it as already-vaulted so the next ⬇ Vault doesn't
-        // create a duplicate. Handles the load-thought → close-app → reopen →
-        // hit-Vault sequence.
-        if (!string.IsNullOrWhiteSpace(_noteText))
+        // If the loaded note matches a vaulted thought exactly, treat it as an
+        // editing session of that thought so ⬇ Vault updates rather than dupes.
+        if (!string.IsNullOrWhiteSpace(markdown))
         {
             try
             {
-                var snapshot = _noteText.Trim();
+                var snapshot = GetMarkdown().Trim();
                 var match = StorageService.LoadVaultThoughts()
                     .FirstOrDefault(t => t.Content.Trim() == snapshot);
                 if (match != null)
                 {
-                    _vaultedSnapshot = _noteText;
+                    _vaultedSnapshot = GetMarkdown();
                     _loadedThought = match;
                 }
             }
@@ -97,16 +98,39 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
         }
     }
 
-    // Segoe Fluent Icons / MDL2 Assets glyphs (private-use codepoints).
-    private const string SunGlyph = "\uE706";   // Brightness — sun with rays
-    private const string MoonGlyph = "\uE793";  // ClearNight — crescent moon
+    // ----------------------------------------------------- markdown <-> editor
+
+    private string GetMarkdown() => MarkdownFlow.ToMarkdown(RichEditor.Document);
+
+    private void SetMarkdown(string markdown)
+    {
+        _suppressSave = true;
+        try
+        {
+            RichEditor.Document = MarkdownFlow.ToFlowDocument(markdown, OnCheckboxToggled);
+        }
+        finally
+        {
+            _suppressSave = false;
+        }
+    }
+
+    private void SaveNow() => StorageService.SaveScratchPad(GetMarkdown());
+
+    private void RichEditor_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_suppressSave) return;
+        SaveNow();
+    }
+
+    private void OnCheckboxToggled(object sender, RoutedEventArgs e) => SaveNow();
+
+    // ----------------------------------------------------- theme toggle
 
     private void OnThemeChanged(object? sender, EventArgs e) => UpdateThemeGlyph();
 
     private void UpdateThemeGlyph()
     {
-        // Show the destination state: sun when currently dark (click for
-        // light), moon when currently light (click for dark).
         ThemeToggleGlyph.Text = ThemeService.IsDark ? SunGlyph : MoonGlyph;
     }
 
@@ -114,19 +138,6 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
     {
         ThemeService.Toggle();
         ShowStatus(ThemeService.IsDark ? "Dark mode" : "Light mode");
-    }
-
-    public string NoteText
-    {
-        get => _noteText;
-        set
-        {
-            if (_noteText != value)
-            {
-                _noteText = value;
-                OnPropertyChanged(nameof(NoteText));
-            }
-        }
     }
 
     public double EditorFontSize
@@ -144,30 +155,94 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
         }
     }
 
+    // ----------------------------------------------------- formatting toolbar
+
+    private void Bold_Click(object sender, RoutedEventArgs e)
+    {
+        EditingCommands.ToggleBold.Execute(null, RichEditor);
+        RichEditor.Focus();
+        SaveNow();
+    }
+
+    private void Italic_Click(object sender, RoutedEventArgs e)
+    {
+        EditingCommands.ToggleItalic.Execute(null, RichEditor);
+        RichEditor.Focus();
+        SaveNow();
+    }
+
+    private void Highlight_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement fe || fe.Tag is not string hex)
+            return;
+
+        try
+        {
+            var color = (Color)ColorConverter.ConvertFromString(hex)!;
+            var brush = new SolidColorBrush(color);
+            brush.Freeze();
+            RichEditor.Selection.ApplyPropertyValue(TextElement.BackgroundProperty, brush);
+            RichEditor.Selection.ApplyPropertyValue(TextElement.ForegroundProperty, MarkdownFlow.HighlightForegroundBrush);
+        }
+        catch { /* ignore bad color */ }
+
+        RichEditor.Focus();
+        SaveNow();
+    }
+
+    private void ClearHighlight_Click(object sender, RoutedEventArgs e)
+    {
+        var fg = (TryFindResource("TextPrimaryBrush") as Brush) ?? RichEditor.Foreground;
+        RichEditor.Selection.ApplyPropertyValue(TextElement.BackgroundProperty, Brushes.Transparent);
+        RichEditor.Selection.ApplyPropertyValue(TextElement.ForegroundProperty, fg);
+        RichEditor.Focus();
+        SaveNow();
+    }
+
+    private void Task_Click(object sender, RoutedEventArgs e)
+    {
+        if (RichEditor.CaretPosition?.Paragraph is not { } para)
+            return;
+
+        if (MarkdownFlow.TryGetTaskCheckBox(para, out _))
+        {
+            // Remove the leading checkbox → plain line.
+            if (para.Inlines.FirstInline is { } first)
+                para.Inlines.Remove(first);
+        }
+        else
+        {
+            var cb = MarkdownFlow.NewCheckbox(false, OnCheckboxToggled);
+            if (para.Inlines.FirstInline is { } first)
+                para.Inlines.InsertBefore(first, cb);
+            else
+                para.Inlines.Add(cb);
+        }
+
+        RichEditor.Focus();
+        SaveNow();
+    }
+
+    // ----------------------------------------------------- title-bar actions
+
     private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (e.ClickCount == 1)
-        {
             DragMove();
-        }
     }
 
-    private void CloseButton_Click(object sender, RoutedEventArgs e)
-    {
-        Hide();
-    }
+    private void CloseButton_Click(object sender, RoutedEventArgs e) => Hide();
 
     private void VaultButton_Click(object sender, RoutedEventArgs e)
     {
-        VaultPad(NoteEditor.Text, explicitTitle: null);
-        NoteEditor.Focus();
+        VaultPad(GetMarkdown(), explicitTitle: null);
+        RichEditor.Focus();
     }
 
     private string? _askSnapshotDir;
 
     private void AskButton_Click(object sender, RoutedEventArgs e)
     {
-        // Fresh conversation each time so it reflects the current pad content.
         if (_askWindow != null)
         {
             _askWindow.Close();
@@ -175,15 +250,11 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
         }
         CleanupAskSnapshot();
 
-        // Snapshot the pad to a fresh per-Ask folder and run the provider
-        // there. Letting it read scratch-pad.md via its own Read tool is far
-        // more reliable than stuffing the pad's contents into the prompt — the
-        // prompt stays small (so it can't time out on big pads), and pad text
-        // that looks like slash commands ("/read 30") never enters the
-        // prompt-parsing path.
-        //
-        // The folder lives under the user profile (NOT %TEMP%, which is under
-        // AppData where Claude's project init misbehaves).
+        // Snapshot the pad (as markdown) to a fresh per-Ask folder and run the
+        // provider there. Reading scratch-pad.md via the CLI's own Read tool is
+        // more reliable than stuffing contents into the prompt. The folder lives
+        // under the user profile (NOT %TEMP%, which is under AppData where
+        // Claude's project init misbehaves).
         var dir = Path.Combine(
             StorageService.GetAskWorkspaceRoot(),
             "pad-" + Guid.NewGuid().ToString("N")[..8]);
@@ -191,7 +262,7 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
         try
         {
             Directory.CreateDirectory(dir);
-            File.WriteAllText(Path.Combine(dir, "scratch-pad.md"), NoteEditor.Text ?? string.Empty);
+            File.WriteAllText(Path.Combine(dir, "scratch-pad.md"), GetMarkdown());
             _askSnapshotDir = dir;
         }
         catch
@@ -240,17 +311,15 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
             Directory.CreateDirectory(folder);
             StorageService.EnsureVaultReadme();
             StorageService.RegenerateVaultIndex();
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = folder,
-                UseShellExecute = true
-            });
+            Process.Start(new ProcessStartInfo { FileName = folder, UseShellExecute = true });
         }
         catch
         {
             ShowStatus("Couldn't open vault folder", isError: true);
         }
     }
+
+    // ----------------------------------------------------- keyboard
 
     private void Window_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
@@ -300,21 +369,17 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
     public void VaultCurrentThought()
     {
         var wasVisible = IsVisible;
-        var thought = VaultPad(NoteEditor.Text, explicitTitle: null);
+        var thought = VaultPad(GetMarkdown(), explicitTitle: null);
         if (thought != null && !wasVisible)
             ThoughtVaulted?.Invoke(this, thought.Title);
     }
 
     private bool TryExecuteSlashCommand()
     {
-        var text = NoteEditor.Text;
-        var caret = NoteEditor.CaretIndex;
+        if (RichEditor.CaretPosition?.Paragraph is not { } para)
+            return false;
 
-        var lineStart = caret > 0 ? text.LastIndexOf('\n', caret - 1) + 1 : 0;
-        var lineEnd = text.IndexOf('\n', caret);
-        if (lineEnd < 0) lineEnd = text.Length;
-
-        var line = text.Substring(lineStart, lineEnd - lineStart);
+        var line = new TextRange(para.ContentStart, para.ContentEnd).Text;
         var trimmed = line.TrimStart();
         if (!trimmed.StartsWith("/"))
             return false;
@@ -328,41 +393,39 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
             command.StartsWith("vault ", StringComparison.OrdinalIgnoreCase))
         {
             var title = command.Length > 5 ? command[5..].Trim() : null;
-
-            // Vault everything except the /vault command line itself.
-            var before = text[..lineStart];
-            var after = lineEnd < text.Length ? text[(lineEnd + 1)..] : string.Empty;
-            var content = (before + after).Trim();
-
+            var content = MarkdownFlow.ToMarkdown(RichEditor.Document, para).Trim();
             VaultPad(content, string.IsNullOrWhiteSpace(title) ? null : title);
             return true;
         }
 
-        // /daily — append the whole pad as a timestamped entry in today's daily
-        // note, then start fresh (the running-log counterpart to /vault).
+        // /daily — append the whole pad to today's daily note, then start fresh.
         if (command.Equals("daily", StringComparison.OrdinalIgnoreCase))
         {
-            var before = text[..lineStart];
-            var after = lineEnd < text.Length ? text[(lineEnd + 1)..] : string.Empty;
-            var content = (before + after).Trim();
-
+            var content = MarkdownFlow.ToMarkdown(RichEditor.Document, para).Trim();
             DailyLogPad(content);
             return true;
         }
 
-        // Otherwise: create a task (e.g. "/read 30") and leave a markdown record.
+        // Otherwise: create a task (e.g. "/read 30") and leave a checkbox record.
         if (_viewModel == null)
             return false;
 
         _viewModel.AddTask(command);
 
-        var indent = line[..(line.Length - trimmed.Length)];
-        var replacement = $"{indent}- [ ] {command}\n";
-        NoteEditor.Text = text.Remove(lineStart, lineEnd - lineStart).Insert(lineStart, replacement);
-        NoteEditor.CaretIndex = lineStart + replacement.Length;
+        // Turn the command line into a task checkbox, then drop to a fresh line.
+        para.Inlines.Clear();
+        para.Inlines.Add(MarkdownFlow.NewCheckbox(false, OnCheckboxToggled));
+        para.Inlines.Add(new Run(command));
 
+        var next = new Paragraph { Margin = new Thickness(0) };
+        RichEditor.Document.Blocks.InsertAfter(para, next);
+        RichEditor.CaretPosition = next.ContentStart;
+
+        SaveNow();
         return true;
     }
+
+    // ----------------------------------------------------- vault / daily
 
     private VaultThought? VaultPad(string content, string? explicitTitle)
     {
@@ -388,9 +451,6 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
         VaultThought? thought;
         var updated = false;
 
-        // If the pad is an editing session of a vaulted thought (and the user
-        // didn't force a new title via /vault <title>), update that note in
-        // place instead of creating a duplicate.
         if (_loadedThought != null && keepingTitle)
         {
             thought = StorageService.UpdateThought(_loadedThought, content);
@@ -416,13 +476,12 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
     // Clear the pad and forget which thought it came from (fresh start).
     private void ResetPad()
     {
-        NoteEditor.Clear();
+        SetMarkdown(string.Empty);
         StorageService.SaveScratchPad(string.Empty);
         _vaultedSnapshot = string.Empty;
         _loadedThought = null;
     }
 
-    // Append the pad to today's daily note, then start fresh.
     private void DailyLogPad(string content)
     {
         if (string.IsNullOrWhiteSpace(content))
@@ -440,7 +499,7 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
 
         ResetPad();
         _vaultWindow?.RefreshThoughts();
-        ShowStatus($"Logged to {System.IO.Path.GetFileNameWithoutExtension(file)}");
+        ShowStatus($"Logged to {Path.GetFileNameWithoutExtension(file)}");
     }
 
     /// <summary>
@@ -450,9 +509,9 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
     /// </summary>
     public void LoadThoughtIntoPad(VaultThought thought)
     {
-        var current = NoteEditor.Text;
+        var current = GetMarkdown();
         string? committed = null;
-        var target = thought;   // the thought whose content we'll actually load
+        var target = thought;
 
         var hasUnsavedEdits = !string.IsNullOrWhiteSpace(current)
             && current.Trim() != _vaultedSnapshot.Trim()
@@ -462,13 +521,12 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
         {
             if (_loadedThought != null)
             {
-                // Persist the edits to the thought we were editing.
                 if (StorageService.UpdateThought(_loadedThought, current) is { } u)
                 {
                     if (_loadedThought.Id == thought.Id)
-                        target = u;                       // reloading the same note — keep edits
+                        target = u;
                     else
-                        committed = $"saved “{u.Title}”"; // switching notes — note we saved the old one
+                        committed = $"saved “{u.Title}”";
                 }
             }
             else if (StorageService.SaveThought(current) != null)
@@ -477,45 +535,35 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
             }
         }
 
-        NoteEditor.Text = target.Content.TrimEnd();
-        NoteEditor.CaretIndex = NoteEditor.Text.Length;
-        StorageService.SaveScratchPad(NoteEditor.Text);
-        _vaultedSnapshot = NoteEditor.Text;
+        SetMarkdown(target.Content.TrimEnd());
+        StorageService.SaveScratchPad(GetMarkdown());
+        _vaultedSnapshot = GetMarkdown();
         _loadedThought = target;
+        RichEditor.CaretPosition = RichEditor.Document.ContentEnd;
 
         _vaultWindow?.RefreshThoughts();
         ShowStatus(committed != null ? $"{committed} · loaded: {target.Title}" : $"Loaded: {target.Title}");
 
         Show();
         Activate();
-        NoteEditor.Focus();
+        RichEditor.Focus();
     }
 
     private void ShowStatus(string message, bool isError = false)
     {
         StatusText.Text = message;
         StatusText.Foreground = isError
-            ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xEF, 0x53, 0x50))
-            : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x4C, 0xAF, 0x50));
+            ? new SolidColorBrush(Color.FromRgb(0xEF, 0x53, 0x50))
+            : new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50));
         _statusTimer.Stop();
         _statusTimer.Start();
     }
 
     private void Window_Closing(object sender, CancelEventArgs e)
     {
-        // Hide instead of close, save content
         e.Cancel = true;
-        StorageService.SaveScratchPad(NoteEditor.Text);
+        SaveNow();
         Hide();
-    }
-
-    private void NoteEditor_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
-    {
-        if (NoteEditor.Template.FindName("PART_ContentHost", NoteEditor) is ScrollViewer sv)
-        {
-            sv.ScrollToVerticalOffset(sv.VerticalOffset - e.Delta / 3.0);
-            e.Handled = true;
-        }
     }
 
     protected virtual void OnPropertyChanged(string propertyName)
