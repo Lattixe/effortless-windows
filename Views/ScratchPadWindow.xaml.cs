@@ -18,7 +18,6 @@ using Brushes = System.Windows.Media.Brushes;
 using ColorConverter = System.Windows.Media.ColorConverter;
 using Point = System.Windows.Point;
 using Button = System.Windows.Controls.Button;
-using CheckBox = System.Windows.Controls.CheckBox;
 
 namespace Effortless.Views;
 
@@ -120,7 +119,7 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
         _suppressSave = true;
         try
         {
-            RichEditor.Document = MarkdownFlow.ToFlowDocument(markdown, OnCheckboxToggled);
+            RichEditor.Document = MarkdownFlow.ToFlowDocument(markdown);
         }
         finally
         {
@@ -137,67 +136,34 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
         SaveNow();
     }
 
-    private void OnCheckboxToggled(object sender, RoutedEventArgs e)
-    {
-        if (sender is CheckBox cb && FindParagraphOf(cb) is { } para)
-        {
-            _suppressSave = true;
-            try { MarkdownFlow.SetTaskCompletedVisual(para, cb.IsChecked == true); }
-            finally { _suppressSave = false; }
-        }
-        SaveNow();
-    }
-
+    // Toggle a task by clicking its ☐/☑ glyph. Tasks are plain text glyphs (not
+    // embedded controls), so we hit-test the click against the glyph's rect.
     private void RichEditor_PreviewMouseDown(object sender, MouseButtonEventArgs e)
     {
         try
         {
-            if (FindCheckBoxAncestor(e.OriginalSource as DependencyObject) is { } cb)
-            {
-                cb.IsChecked = !(cb.IsChecked ?? false);
-                e.Handled = true; // don't let the editor select/caret the embedded box
-            }
+            var pt = e.GetPosition(RichEditor);
+            if (RichEditor.GetPositionFromPoint(pt, true)?.Paragraph is not { } para)
+                return;
+            if (!MarkdownFlow.TryGetTaskGlyph(para, out _, out var isChecked))
+                return;
+
+            // Only toggle when the click lands on the glyph at line start.
+            var glyphRect = para.ContentStart.GetCharacterRect(LogicalDirection.Forward);
+            if (glyphRect.IsEmpty) return;
+            if (pt.Y < glyphRect.Top - 2 || pt.Y > glyphRect.Bottom + 2) return;
+            if (pt.X > glyphRect.Right + 8) return; // clicked into the text → normal caret
+
+            _suppressSave = true;
+            try { MarkdownFlow.SetTaskCompletedVisual(para, !isChecked); }
+            finally { _suppressSave = false; }
+            e.Handled = true;
+            SaveNow();
         }
         catch
         {
             // A stray click must never crash the pad.
         }
-    }
-
-    // Walk up from the clicked element to a CheckBox. The clicked element may be
-    // a Visual (checkbox template part) OR a ContentElement (Run/InlineUIContainer);
-    // VisualTreeHelper.GetParent throws on the latter, so handle both trees.
-    private static CheckBox? FindCheckBoxAncestor(DependencyObject? d)
-    {
-        while (d != null)
-        {
-            if (d is CheckBox cb) return cb;
-
-            DependencyObject? parent = d is Visual ? VisualTreeHelper.GetParent(d) : null;
-            parent ??= d switch
-            {
-                FrameworkElement fe => fe.Parent ?? fe.TemplatedParent,
-                FrameworkContentElement fce => fce.Parent,
-                ContentElement ce => ContentOperations.GetParent(ce),
-                _ => null
-            };
-            d = parent;
-        }
-        return null;
-    }
-
-    private Paragraph? FindParagraphOf(CheckBox cb)
-    {
-        foreach (var block in RichEditor.Document.Blocks)
-        {
-            if (block is Paragraph p &&
-                p.Inlines.FirstInline is InlineUIContainer { Child: CheckBox c } &&
-                ReferenceEquals(c, cb))
-            {
-                return p;
-            }
-        }
-        return null;
     }
 
     // ----------------------------------------------------- theme toggle
@@ -284,8 +250,8 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
     }
 
     /// <summary>Replace the first paragraph's text with <paramref name="text"/>,
-    /// preserving a leading task checkbox if there was one. Creates the
-    /// paragraph if the document is empty.</summary>
+    /// preserving a leading task glyph if there was one. Creates the paragraph
+    /// if the document is empty.</summary>
     private void SetFirstLineText(string text)
     {
         _suppressSave = true;
@@ -300,13 +266,13 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
                     RichEditor.Document.Blocks.Add(p);
             }
 
-            bool? wasChecked = null;
-            if (p.Inlines.FirstInline is InlineUIContainer { Child: CheckBox c })
-                wasChecked = c.IsChecked;
+            bool? wasChecked = MarkdownFlow.TryGetTaskGlyph(p, out _, out var isChecked)
+                ? isChecked
+                : null;
 
             p.Inlines.Clear();
             if (wasChecked.HasValue)
-                p.Inlines.Add(MarkdownFlow.NewCheckbox(wasChecked.Value, OnCheckboxToggled));
+                p.Inlines.Add(MarkdownFlow.MakeTaskGlyphRun(wasChecked.Value));
             p.Inlines.Add(new Run(text));
         }
         finally
@@ -424,19 +390,19 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
         if (RichEditor.CaretPosition?.Paragraph is not { } para)
             return;
 
-        if (MarkdownFlow.TryGetTaskCheckBox(para, out _))
+        if (MarkdownFlow.TryGetTaskGlyph(para, out var glyph, out _))
         {
-            // Remove the leading checkbox → plain line.
-            if (para.Inlines.FirstInline is { } first)
-                para.Inlines.Remove(first);
+            // Remove the leading glyph and clear any strike-through → plain line.
+            MarkdownFlow.SetTaskCompletedVisual(para, false);
+            para.Inlines.Remove(glyph);
         }
         else
         {
-            var cb = MarkdownFlow.NewCheckbox(false, OnCheckboxToggled);
+            var glyphRun = MarkdownFlow.MakeTaskGlyphRun(false);
             if (para.Inlines.FirstInline is { } first)
-                para.Inlines.InsertBefore(first, cb);
+                para.Inlines.InsertBefore(first, glyphRun);
             else
-                para.Inlines.Add(cb);
+                para.Inlines.Add(glyphRun);
         }
 
         RichEditor.Focus();
@@ -595,14 +561,14 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
     {
         if (RichEditor.CaretPosition is not { } caret) return false;
         if (caret.Paragraph is not { } para) return false;
-        if (MarkdownFlow.TryGetTaskCheckBox(para, out _)) return false; // already a task
+        if (MarkdownFlow.TryGetTaskGlyph(para, out _, out _)) return false; // already a task
 
         var before = new TextRange(para.ContentStart, caret).Text.TrimStart();
         if (before != "-" && before != "*") return false;
 
         var after = new TextRange(caret, para.ContentEnd).Text;
         para.Inlines.Clear();
-        para.Inlines.Add(MarkdownFlow.NewCheckbox(false, OnCheckboxToggled));
+        para.Inlines.Add(MarkdownFlow.MakeTaskGlyphRun(false));
         if (after.Length > 0)
             para.Inlines.Add(new Run(after));
         RichEditor.CaretPosition = para.ContentEnd;
@@ -614,24 +580,24 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
     private bool TryContinueTaskList()
     {
         if (RichEditor.CaretPosition?.Paragraph is not { } para) return false;
-        if (!MarkdownFlow.TryGetTaskCheckBox(para, out _)) return false;
+        if (!MarkdownFlow.TryGetTaskGlyph(para, out var glyph, out _)) return false;
 
         var text = string.Empty;
         foreach (var inl in para.Inlines)
-            if (inl is Run r) text += r.Text;
+            if (inl is Run r && !ReferenceEquals(r, glyph)) text += r.Text;
 
         if (string.IsNullOrWhiteSpace(text))
         {
-            // Empty task + Enter → drop the checkbox, leave a plain line.
-            if (para.Inlines.FirstInline is { } first)
-                para.Inlines.Remove(first);
+            // Empty task + Enter → drop the glyph, leave a plain line.
+            MarkdownFlow.SetTaskCompletedVisual(para, false);
+            para.Inlines.Remove(glyph);
             RichEditor.CaretPosition = para.ContentStart;
             SaveNow();
             return true;
         }
 
         var next = new Paragraph { Margin = new Thickness(0) };
-        next.Inlines.Add(MarkdownFlow.NewCheckbox(false, OnCheckboxToggled));
+        next.Inlines.Add(MarkdownFlow.MakeTaskGlyphRun(false));
         RichEditor.Document.Blocks.InsertAfter(para, next);
         RichEditor.CaretPosition = next.ContentEnd;
         SaveNow();
@@ -688,9 +654,9 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
 
         _viewModel.AddTask(command);
 
-        // Turn the command line into a task checkbox, then drop to a fresh line.
+        // Turn the command line into a task, then drop to a fresh line.
         para.Inlines.Clear();
-        para.Inlines.Add(MarkdownFlow.NewCheckbox(false, OnCheckboxToggled));
+        para.Inlines.Add(MarkdownFlow.MakeTaskGlyphRun(false));
         para.Inlines.Add(new Run(command));
 
         var next = new Paragraph { Margin = new Thickness(0) };

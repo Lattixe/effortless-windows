@@ -3,14 +3,13 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
 // Disambiguate WPF types from the WinForms/System.Drawing globals.
 using Color = System.Windows.Media.Color;
 using Brush = System.Windows.Media.Brush;
 using ColorConverter = System.Windows.Media.ColorConverter;
-using CheckBox = System.Windows.Controls.CheckBox;
+using FontFamily = System.Windows.Media.FontFamily;
 
 namespace Effortless.Views;
 
@@ -20,12 +19,17 @@ namespace Effortless.Views;
 /// round-trips losslessly:
 ///   **bold**  *italic*  ==highlight==  &lt;mark style="background:#hex"&gt;…&lt;/mark&gt;
 ///   - [ ] task   - [x] done
-/// One source line ↔ one paragraph, so structure is preserved exactly.
+/// Tasks are a leading text glyph (☐/☑) tagged "taskglyph", NOT an embedded
+/// control — embedded controls don't receive clicks inside an editable
+/// RichTextBox. One source line ↔ one paragraph.
 /// </summary>
 internal static class MarkdownFlow
 {
-    // Highlight swatches. Highlighted text uses a dark foreground for contrast
-    // on the colored background (like a real highlighter), independent of theme.
+    public const string UncheckedGlyph = "☐"; // ☐
+    public const string CheckedGlyph = "☑";   // ☑
+    private const string TaskTag = "taskglyph";
+    private static readonly FontFamily SymbolFont = new("Segoe UI Symbol");
+
     public static readonly (string Name, Color Color)[] Highlights =
     {
         ("Yellow", HexColor("#FFF59D")),
@@ -43,12 +47,12 @@ internal static class MarkdownFlow
 
     // ---------------------------------------------------------------- parse
 
-    public static FlowDocument ToFlowDocument(string? markdown, RoutedEventHandler? onCheckbox = null)
+    public static FlowDocument ToFlowDocument(string? markdown)
     {
         var doc = new FlowDocument();
         var lines = (markdown ?? string.Empty).Replace("\r\n", "\n").Split('\n');
         foreach (var line in lines)
-            doc.Blocks.Add(BuildParagraph(line, onCheckbox));
+            doc.Blocks.Add(BuildParagraph(line));
         if (doc.Blocks.Count == 0)
             doc.Blocks.Add(new Paragraph { Margin = new Thickness(0) });
         return doc;
@@ -57,7 +61,7 @@ internal static class MarkdownFlow
     private static readonly Regex TaskRe =
         new(@"^[ \t]*[-*] \[([ xX])\][ ]?(.*)$", RegexOptions.Compiled);
 
-    private static Paragraph BuildParagraph(string line, RoutedEventHandler? onCheckbox)
+    private static Paragraph BuildParagraph(string line)
     {
         var p = new Paragraph { Margin = new Thickness(0) };
 
@@ -65,7 +69,7 @@ internal static class MarkdownFlow
         if (m.Success)
         {
             var isChecked = m.Groups[1].Value is "x" or "X";
-            p.Inlines.Add(NewCheckbox(isChecked, onCheckbox));
+            p.Inlines.Add(MakeTaskGlyphRun(isChecked));
             foreach (var run in ParseInlines(m.Groups[2].Value))
                 p.Inlines.Add(run);
             if (isChecked)
@@ -78,46 +82,38 @@ internal static class MarkdownFlow
         return p;
     }
 
-    public static InlineUIContainer NewCheckbox(bool isChecked, RoutedEventHandler? onCheckbox)
-    {
-        var cb = new CheckBox
+    /// <summary>The leading clickable task glyph (☐/☑) for a task line.</summary>
+    public static Run MakeTaskGlyphRun(bool isChecked) =>
+        new((isChecked ? CheckedGlyph : UncheckedGlyph) + " ")
         {
-            IsChecked = isChecked,
-            Margin = new Thickness(0, 0, 6, 0),
-            VerticalAlignment = VerticalAlignment.Center,
-            Focusable = false,
-            Tag = "task"
+            Tag = TaskTag,
+            FontFamily = SymbolFont
         };
-        if (onCheckbox != null)
+
+    public static bool TryGetTaskGlyph(Paragraph p, out Run glyph, out bool isChecked)
+    {
+        glyph = null!;
+        isChecked = false;
+        if (p.Inlines.FirstInline is Run r && (r.Tag as string) == TaskTag)
         {
-            cb.Checked += onCheckbox;
-            cb.Unchecked += onCheckbox;
+            glyph = r;
+            isChecked = r.Text.StartsWith(CheckedGlyph, StringComparison.Ordinal);
+            return true;
         }
-        // Clicks are routed to the checkbox by the editor itself (see
-        // ScratchPadWindow's editor-level PreviewMouseLeftButtonDown handler),
-        // because an editable RichTextBox otherwise just selects the embedded box.
-        return new InlineUIContainer(cb) { BaselineAlignment = BaselineAlignment.Center };
+        return false;
     }
 
-    /// <summary>Strike through (and dim) a task paragraph's text to show completion.</summary>
+    /// <summary>Set/clear the checked glyph and strike-through on a task line.</summary>
     public static void SetTaskCompletedVisual(Paragraph p, bool done)
     {
         foreach (var inline in p.Inlines)
         {
-            if (inline is Run r)
+            if (inline is not Run r) continue;
+            if ((r.Tag as string) == TaskTag)
+                r.Text = (done ? CheckedGlyph : UncheckedGlyph) + " ";
+            else
                 r.TextDecorations = done ? TextDecorations.Strikethrough : null;
         }
-    }
-
-    public static bool TryGetTaskCheckBox(Paragraph p, out CheckBox checkBox)
-    {
-        checkBox = null!;
-        if (p.Inlines.FirstInline is InlineUIContainer { Child: CheckBox cb })
-        {
-            checkBox = cb;
-            return true;
-        }
-        return false;
     }
 
     private static List<Run> ParseInlines(string text)
@@ -148,7 +144,6 @@ internal static class MarkdownFlow
         int i = 0;
         while (i < text.Length)
         {
-            // **bold**
             if (TryPair(text, i, "**", out int closeB))
             {
                 Flush();
@@ -156,7 +151,6 @@ internal static class MarkdownFlow
                 i = closeB + 2;
                 continue;
             }
-            // ==highlight==
             if (TryPair(text, i, "==", out int closeH))
             {
                 Flush();
@@ -164,7 +158,6 @@ internal static class MarkdownFlow
                 i = closeH + 2;
                 continue;
             }
-            // <mark ...>colored</mark>
             if (text[i] == '<')
             {
                 var mm = MarkRe.Match(text, i);
@@ -182,7 +175,6 @@ internal static class MarkdownFlow
                     continue;
                 }
             }
-            // *italic*
             if (TryItalic(text, i, out int closeI))
             {
                 Flush();
@@ -217,7 +209,7 @@ internal static class MarkdownFlow
         if (string.CompareOrdinal(s, i, marker, 0, marker.Length) != 0) return false;
         int from = i + marker.Length;
         int idx = s.IndexOf(marker, from, StringComparison.Ordinal);
-        if (idx <= from) return false; // not found, or empty content
+        if (idx <= from) return false;
         closeStart = idx;
         return true;
     }
@@ -226,12 +218,12 @@ internal static class MarkdownFlow
     {
         closeStart = -1;
         if (s[i] != '*') return false;
-        if (i + 1 < s.Length && s[i + 1] == '*') return false; // part of **bold**
+        if (i + 1 < s.Length && s[i + 1] == '*') return false;
         for (int j = i + 1; j < s.Length; j++)
         {
             if (s[j] == '*' && s[j - 1] != '*' && (j + 1 >= s.Length || s[j + 1] != '*'))
             {
-                if (j == i + 1) return false; // empty
+                if (j == i + 1) return false;
                 closeStart = j;
                 return true;
             }
@@ -243,7 +235,6 @@ internal static class MarkdownFlow
 
     public static string ToMarkdown(FlowDocument doc) => ToMarkdown(doc, null);
 
-    /// <summary>Serialize the document, optionally skipping one block (e.g. a slash-command line).</summary>
     public static string ToMarkdown(FlowDocument doc, Block? skip)
     {
         var sb = new StringBuilder();
@@ -265,14 +256,12 @@ internal static class MarkdownFlow
         var inlines = p.Inlines.ToList();
         int start = 0;
 
-        if (inlines.Count > 0 && inlines[0] is InlineUIContainer { Child: CheckBox cb })
+        if (inlines.Count > 0 && inlines[0] is Run g && (g.Tag as string) == TaskTag)
         {
-            sb.Append(cb.IsChecked == true ? "- [x] " : "- [ ] ");
+            sb.Append(g.Text.StartsWith(CheckedGlyph, StringComparison.Ordinal) ? "- [x] " : "- [ ] ");
             start = 1;
         }
 
-        // Collect runs, then merge adjacent ones with identical formatting so we
-        // don't emit "**a****b**".
         var tokens = new List<(string text, bool bold, bool italic, Brush? bg)>();
         for (int k = start; k < inlines.Count; k++)
         {
@@ -304,7 +293,6 @@ internal static class MarkdownFlow
     private static string Wrap(string text, bool bold, bool italic, Brush? bg)
     {
         if (text.Length == 0) return string.Empty;
-        // Don't decorate whitespace-only spans (avoids "** **").
         if (string.IsNullOrWhiteSpace(text)) return text;
 
         var s = text;
