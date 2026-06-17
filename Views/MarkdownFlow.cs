@@ -93,14 +93,9 @@ internal static class MarkdownFlow
             cb.Checked += onCheckbox;
             cb.Unchecked += onCheckbox;
         }
-        // An editable RichTextBox swallows clicks to embedded controls (it owns
-        // the mouse for caret/selection). Intercept the tunneling press, toggle
-        // manually, and mark it handled so the editor don't just move the caret.
-        cb.PreviewMouseLeftButtonDown += (_, ev) =>
-        {
-            cb.IsChecked = !(cb.IsChecked ?? false);
-            ev.Handled = true;
-        };
+        // Clicks are routed to the checkbox by the editor itself (see
+        // ScratchPadWindow's editor-level PreviewMouseLeftButtonDown handler),
+        // because an editable RichTextBox otherwise just selects the embedded box.
         return new InlineUIContainer(cb) { BaselineAlignment = BaselineAlignment.Center };
     }
 

@@ -60,6 +60,14 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
         _editorFontSize = Math.Clamp(StorageService.LoadScratchPadFontSize(), MinFontSize, MaxFontSize);
         OnPropertyChanged(nameof(EditorFontSize));
 
+        // Route clicks that land on a task checkbox to the checkbox itself —
+        // an editable RichTextBox otherwise just selects the embedded control.
+        // handledEventsToo so it runs even though the editor handles the event.
+        RichEditor.AddHandler(
+            UIElement.PreviewMouseLeftButtonDownEvent,
+            new MouseButtonEventHandler(RichEditor_PreviewMouseDown),
+            handledEventsToo: true);
+
         // Load saved note into the rich editor.
         var markdown = StorageService.LoadScratchPad();
         SetMarkdown(markdown);
@@ -138,6 +146,25 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
             finally { _suppressSave = false; }
         }
         SaveNow();
+    }
+
+    private void RichEditor_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (FindVisualAncestor<CheckBox>(e.OriginalSource as DependencyObject) is { } cb)
+        {
+            cb.IsChecked = !(cb.IsChecked ?? false);
+            e.Handled = true; // don't let the editor select/caret the embedded box
+        }
+    }
+
+    private static T? FindVisualAncestor<T>(DependencyObject? d) where T : DependencyObject
+    {
+        while (d != null)
+        {
+            if (d is T t) return t;
+            d = VisualTreeHelper.GetParent(d);
+        }
+        return null;
     }
 
     private Paragraph? FindParagraphOf(CheckBox cb)
