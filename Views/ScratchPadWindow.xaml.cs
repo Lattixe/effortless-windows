@@ -150,19 +150,38 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
 
     private void RichEditor_PreviewMouseDown(object sender, MouseButtonEventArgs e)
     {
-        if (FindVisualAncestor<CheckBox>(e.OriginalSource as DependencyObject) is { } cb)
+        try
         {
-            cb.IsChecked = !(cb.IsChecked ?? false);
-            e.Handled = true; // don't let the editor select/caret the embedded box
+            if (FindCheckBoxAncestor(e.OriginalSource as DependencyObject) is { } cb)
+            {
+                cb.IsChecked = !(cb.IsChecked ?? false);
+                e.Handled = true; // don't let the editor select/caret the embedded box
+            }
+        }
+        catch
+        {
+            // A stray click must never crash the pad.
         }
     }
 
-    private static T? FindVisualAncestor<T>(DependencyObject? d) where T : DependencyObject
+    // Walk up from the clicked element to a CheckBox. The clicked element may be
+    // a Visual (checkbox template part) OR a ContentElement (Run/InlineUIContainer);
+    // VisualTreeHelper.GetParent throws on the latter, so handle both trees.
+    private static CheckBox? FindCheckBoxAncestor(DependencyObject? d)
     {
         while (d != null)
         {
-            if (d is T t) return t;
-            d = VisualTreeHelper.GetParent(d);
+            if (d is CheckBox cb) return cb;
+
+            DependencyObject? parent = d is Visual ? VisualTreeHelper.GetParent(d) : null;
+            parent ??= d switch
+            {
+                FrameworkElement fe => fe.Parent ?? fe.TemplatedParent,
+                FrameworkContentElement fce => fce.Parent,
+                ContentElement ce => ContentOperations.GetParent(ce),
+                _ => null
+            };
+            d = parent;
         }
         return null;
     }
