@@ -129,7 +129,30 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
         SaveNow();
     }
 
-    private void OnCheckboxToggled(object sender, RoutedEventArgs e) => SaveNow();
+    private void OnCheckboxToggled(object sender, RoutedEventArgs e)
+    {
+        if (sender is CheckBox cb && FindParagraphOf(cb) is { } para)
+        {
+            _suppressSave = true;
+            try { MarkdownFlow.SetTaskCompletedVisual(para, cb.IsChecked == true); }
+            finally { _suppressSave = false; }
+        }
+        SaveNow();
+    }
+
+    private Paragraph? FindParagraphOf(CheckBox cb)
+    {
+        foreach (var block in RichEditor.Document.Blocks)
+        {
+            if (block is Paragraph p &&
+                p.Inlines.FirstInline is InlineUIContainer { Child: CheckBox c } &&
+                ReferenceEquals(c, cb))
+            {
+                return p;
+            }
+        }
+        return null;
+    }
 
     // ----------------------------------------------------- theme toggle
 
@@ -507,10 +530,66 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
             return;
         }
 
-        if (e.Key == Key.Enter && TryExecuteSlashCommand())
+        // "- " or "* " at the start of a line → turn the line into a task.
+        if (e.Key == Key.Space && TryConvertDashToTask())
         {
             e.Handled = true;
+            return;
         }
+
+        if (e.Key == Key.Enter && Keyboard.Modifiers == ModifierKeys.None)
+        {
+            if (TryExecuteSlashCommand()) { e.Handled = true; return; }
+            if (TryContinueTaskList()) { e.Handled = true; return; }
+        }
+    }
+
+    /// <summary>Typing a space after a lone leading "-"/"*" converts the line to a task.</summary>
+    private bool TryConvertDashToTask()
+    {
+        if (RichEditor.CaretPosition is not { } caret) return false;
+        if (caret.Paragraph is not { } para) return false;
+        if (MarkdownFlow.TryGetTaskCheckBox(para, out _)) return false; // already a task
+
+        var before = new TextRange(para.ContentStart, caret).Text.TrimStart();
+        if (before != "-" && before != "*") return false;
+
+        var after = new TextRange(caret, para.ContentEnd).Text;
+        para.Inlines.Clear();
+        para.Inlines.Add(MarkdownFlow.NewCheckbox(false, OnCheckboxToggled));
+        if (after.Length > 0)
+            para.Inlines.Add(new Run(after));
+        RichEditor.CaretPosition = para.ContentEnd;
+        SaveNow();
+        return true;
+    }
+
+    /// <summary>Enter inside a task line continues the list; on an empty task it exits.</summary>
+    private bool TryContinueTaskList()
+    {
+        if (RichEditor.CaretPosition?.Paragraph is not { } para) return false;
+        if (!MarkdownFlow.TryGetTaskCheckBox(para, out _)) return false;
+
+        var text = string.Empty;
+        foreach (var inl in para.Inlines)
+            if (inl is Run r) text += r.Text;
+
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            // Empty task + Enter → drop the checkbox, leave a plain line.
+            if (para.Inlines.FirstInline is { } first)
+                para.Inlines.Remove(first);
+            RichEditor.CaretPosition = para.ContentStart;
+            SaveNow();
+            return true;
+        }
+
+        var next = new Paragraph { Margin = new Thickness(0) };
+        next.Inlines.Add(MarkdownFlow.NewCheckbox(false, OnCheckboxToggled));
+        RichEditor.Document.Blocks.InsertAfter(para, next);
+        RichEditor.CaretPosition = next.ContentEnd;
+        SaveNow();
+        return true;
     }
 
     /// <summary>

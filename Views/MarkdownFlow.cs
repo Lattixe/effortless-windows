@@ -68,6 +68,8 @@ internal static class MarkdownFlow
             p.Inlines.Add(NewCheckbox(isChecked, onCheckbox));
             foreach (var run in ParseInlines(m.Groups[2].Value))
                 p.Inlines.Add(run);
+            if (isChecked)
+                SetTaskCompletedVisual(p, true);
             return p;
         }
 
@@ -91,7 +93,25 @@ internal static class MarkdownFlow
             cb.Checked += onCheckbox;
             cb.Unchecked += onCheckbox;
         }
+        // An editable RichTextBox swallows clicks to embedded controls (it owns
+        // the mouse for caret/selection). Intercept the tunneling press, toggle
+        // manually, and mark it handled so the editor don't just move the caret.
+        cb.PreviewMouseLeftButtonDown += (_, ev) =>
+        {
+            cb.IsChecked = !(cb.IsChecked ?? false);
+            ev.Handled = true;
+        };
         return new InlineUIContainer(cb) { BaselineAlignment = BaselineAlignment.Center };
+    }
+
+    /// <summary>Strike through (and dim) a task paragraph's text to show completion.</summary>
+    public static void SetTaskCompletedVisual(Paragraph p, bool done)
+    {
+        foreach (var inline in p.Inlines)
+        {
+            if (inline is Run r)
+                r.TextDecorations = done ? TextDecorations.Strikethrough : null;
+        }
     }
 
     public static bool TryGetTaskCheckBox(Paragraph p, out CheckBox checkBox)
