@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -70,7 +71,8 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
         Loaded += (_, _) =>
         {
             RichEditor.Focus();
-            UpdateThemeGlyph();
+            UpdateThemeMenu();
+            TitleDisplay.Text = ComputeTitle();
         };
 
         ThemeService.Changed += OnThemeChanged;
@@ -120,6 +122,7 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
     private void RichEditor_TextChanged(object sender, TextChangedEventArgs e)
     {
         if (_suppressSave) return;
+        TitleDisplay.Text = ComputeTitle();
         SaveNow();
     }
 
@@ -127,17 +130,162 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
 
     // ----------------------------------------------------- theme toggle
 
-    private void OnThemeChanged(object? sender, EventArgs e) => UpdateThemeGlyph();
+    private void OnThemeChanged(object? sender, EventArgs e) => UpdateThemeMenu();
 
-    private void UpdateThemeGlyph()
+    private void UpdateThemeMenu()
     {
-        ThemeToggleGlyph.Text = ThemeService.IsDark ? SunGlyph : MoonGlyph;
+        if (ThemeMenuItem != null)
+            ThemeMenuItem.Header = ThemeService.IsDark ? "Switch to light" : "Switch to dark";
     }
 
     private void ThemeToggle_Click(object sender, RoutedEventArgs e)
     {
         ThemeService.Toggle();
         ShowStatus(ThemeService.IsDark ? "Dark mode" : "Light mode");
+    }
+
+    // ----------------------------------------------------- title (Google-Docs style)
+
+    /// <summary>The displayed/edited title: the document's first non-empty line.</summary>
+    private string ComputeTitle()
+    {
+        if (RichEditor.Document?.Blocks.FirstBlock is not Paragraph p)
+            return "Untitled";
+
+        var line = new TextRange(p.ContentStart, p.ContentEnd).Text.Trim();
+        if (line.StartsWith("- [ ]", StringComparison.Ordinal)) line = line[5..].Trim();
+        else if (line.StartsWith("- [x]", StringComparison.OrdinalIgnoreCase)) line = line[5..].Trim();
+
+        if (string.IsNullOrWhiteSpace(line)) return "Untitled";
+        if (line.Length > 80) line = line[..80].TrimEnd() + "…";
+        return line;
+    }
+
+    private void TitleDisplay_Click(object sender, MouseButtonEventArgs e)
+    {
+        e.Handled = true;
+        BeginTitleEdit();
+    }
+
+    private void BeginTitleEdit()
+    {
+        var current = ComputeTitle();
+        TitleEdit.Text = current == "Untitled" ? string.Empty : current;
+        TitleDisplay.Visibility = Visibility.Collapsed;
+        TitleEdit.Visibility = Visibility.Visible;
+        TitleEdit.Focus();
+        TitleEdit.SelectAll();
+    }
+
+    private void TitleEdit_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter || e.Key == Key.Tab)
+        {
+            e.Handled = true;
+            EndTitleEdit(commit: true);
+        }
+        else if (e.Key == Key.Escape)
+        {
+            e.Handled = true;
+            EndTitleEdit(commit: false);
+        }
+    }
+
+    private void TitleEdit_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (TitleEdit.Visibility == Visibility.Visible)
+            EndTitleEdit(commit: true);
+    }
+
+    private void EndTitleEdit(bool commit)
+    {
+        if (commit)
+        {
+            var newTitle = TitleEdit.Text.Trim();
+            SetFirstLineText(newTitle);
+            TitleDisplay.Text = ComputeTitle();
+            SaveNow();
+        }
+        TitleEdit.Visibility = Visibility.Collapsed;
+        TitleDisplay.Visibility = Visibility.Visible;
+        RichEditor.Focus();
+    }
+
+    /// <summary>Replace the first paragraph's text with <paramref name="text"/>,
+    /// preserving a leading task checkbox if there was one. Creates the
+    /// paragraph if the document is empty.</summary>
+    private void SetFirstLineText(string text)
+    {
+        _suppressSave = true;
+        try
+        {
+            if (RichEditor.Document.Blocks.FirstBlock is not Paragraph p)
+            {
+                p = new Paragraph { Margin = new Thickness(0) };
+                if (RichEditor.Document.Blocks.FirstBlock is { } existing)
+                    RichEditor.Document.Blocks.InsertBefore(existing, p);
+                else
+                    RichEditor.Document.Blocks.Add(p);
+            }
+
+            bool? wasChecked = null;
+            if (p.Inlines.FirstInline is InlineUIContainer { Child: CheckBox c })
+                wasChecked = c.IsChecked;
+
+            p.Inlines.Clear();
+            if (wasChecked.HasValue)
+                p.Inlines.Add(MarkdownFlow.NewCheckbox(wasChecked.Value, OnCheckboxToggled));
+            p.Inlines.Add(new Run(text));
+        }
+        finally
+        {
+            _suppressSave = false;
+        }
+    }
+
+    // ----------------------------------------------------- floating selection popup
+
+    private void RichEditor_SelectionChanged(object sender, RoutedEventArgs e)
+    {
+        var sel = RichEditor.Selection;
+        if (sel == null || sel.IsEmpty)
+        {
+            SelectionToolbar.IsOpen = false;
+            return;
+        }
+
+        try
+        {
+            var rect = sel.Start.GetCharacterRect(LogicalDirection.Forward);
+            if (rect.IsEmpty)
+            {
+                SelectionToolbar.IsOpen = false;
+                return;
+            }
+
+            // Position the popup just above the selection's start, centered-ish.
+            var screen = RichEditor.PointToScreen(new Point(rect.Left, rect.Top));
+            SelectionToolbar.HorizontalOffset = screen.X - 40;
+            SelectionToolbar.VerticalOffset = screen.Y - 42;
+            if (!SelectionToolbar.IsOpen)
+                SelectionToolbar.IsOpen = true;
+        }
+        catch
+        {
+            SelectionToolbar.IsOpen = false;
+        }
+    }
+
+    // ----------------------------------------------------- hamburger menu
+
+    private void MenuButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { ContextMenu: { } menu })
+        {
+            menu.PlacementTarget = (Button)sender;
+            menu.Placement = PlacementMode.Bottom;
+            menu.IsOpen = true;
+        }
     }
 
     public double EditorFontSize

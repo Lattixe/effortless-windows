@@ -117,14 +117,15 @@
             </Setter>
         </Style>
 
-        <!-- Formatting toolbar button -->
-        <Style x:Key="ToolbarButton" TargetType="Button">
+        <!-- Hidden popup formatting toolbar (appears when text is selected) -->
+        <Style x:Key="PopupToolButton" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Padding" Value="7,3"/>
             <Setter Property="Margin" Value="1,0"/>
             <Setter Property="MinWidth" Value="26"/>
             <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Focusable" Value="False"/>
             <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
             <Setter Property="FontFamily" Value="Segoe UI"/>
             <Setter Property="FontSize" Value="13"/>
@@ -149,12 +150,12 @@
             </Setter>
         </Style>
 
-        <!-- Highlight color swatch -->
-        <Style x:Key="Swatch" TargetType="Button">
+        <Style x:Key="PopupSwatch" TargetType="Button">
             <Setter Property="Width" Value="18"/>
             <Setter Property="Height" Value="18"/>
             <Setter Property="Margin" Value="2,0"/>
             <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Focusable" Value="False"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -189,74 +190,89 @@
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
-            <!-- Title bar -->
+            <!-- Title bar: centered editable document title (Google-Docs style),
+                 hamburger + close on the right. -->
             <Border Grid.Row="0"
                     Background="{DynamicResource ChromeBackgroundBrush}"
                     CornerRadius="8,8,0,0"
-                    Padding="12,8"
+                    Padding="12,6"
                     MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
                 <Grid>
-                    <StackPanel Orientation="Horizontal"
-                                HorizontalAlignment="Left"
-                                VerticalAlignment="Center">
-                        <TextBlock Text="Scratch Pad"
-                                   Foreground="{DynamicResource TextDimBrush}"
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Centered title (display ↔ edit) -->
+                    <Grid Grid.Column="1"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Center"
+                          MaxWidth="380">
+                        <TextBlock x:Name="TitleDisplay"
+                                   Text="Untitled"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"
                                    FontFamily="Segoe UI"
-                                   FontSize="11"
+                                   FontSize="12"
                                    FontWeight="SemiBold"
-                                   VerticalAlignment="Center"/>
-                        <!-- Transient status / confirmation -->
+                                   TextTrimming="CharacterEllipsis"
+                                   VerticalAlignment="Center"
+                                   Cursor="IBeam"
+                                   Padding="8,4"
+                                   MouseLeftButtonDown="TitleDisplay_Click"
+                                   ToolTip="Click to rename"/>
+                        <TextBox x:Name="TitleEdit"
+                                 Foreground="{DynamicResource TextPrimaryBrush}"
+                                 Background="Transparent"
+                                 CaretBrush="{DynamicResource CaretBrush}"
+                                 BorderBrush="{DynamicResource BorderBrush}"
+                                 BorderThickness="0,0,0,1"
+                                 FontFamily="Segoe UI"
+                                 FontSize="12"
+                                 FontWeight="SemiBold"
+                                 Padding="8,3"
+                                 MinWidth="220"
+                                 VerticalAlignment="Center"
+                                 Visibility="Collapsed"
+                                 PreviewKeyDown="TitleEdit_PreviewKeyDown"
+                                 LostKeyboardFocus="TitleEdit_LostKeyboardFocus"/>
+                    </Grid>
+
+                    <!-- Hamburger + Close (right) -->
+                    <StackPanel Grid.Column="2"
+                                Orientation="Horizontal"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Center">
+                        <!-- Transient status (rare, kept compact) -->
                         <TextBlock x:Name="StatusText"
                                    Text=""
                                    Foreground="{DynamicResource AccentGreenBrush}"
                                    FontFamily="Segoe UI"
                                    FontSize="11"
                                    FontWeight="SemiBold"
-                                   Margin="10,0,0,0"
+                                   Margin="0,0,8,0"
                                    VerticalAlignment="Center"/>
-                    </StackPanel>
-                    <StackPanel Orientation="Horizontal"
-                                HorizontalAlignment="Right"
-                                VerticalAlignment="Center">
-                        <!-- Ask Claude about this pad -->
-                        <Button Click="AskButton_Click"
+                        <Button x:Name="MenuButton"
+                                Click="MenuButton_Click"
                                 Style="{StaticResource TitleBarButton}"
-                                ToolTip="Ask Claude about this scratch pad">
-                            <TextBlock Text="✦ Ask"/>
+                                ToolTip="Menu">
+                            <TextBlock Text="≡" FontSize="16" Margin="0,-3,0,0"/>
+                            <Button.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="✦ Ask"          Click="AskButton_Click"/>
+                                    <MenuItem Header="⬇ Vault"        Click="VaultButton_Click"/>
+                                    <MenuItem Header="☰ Vault Browser" Click="BrowseButton_Click"/>
+                                    <MenuItem Header="⤤ Open Folder"   Click="OpenFolderButton_Click"/>
+                                    <Separator/>
+                                    <MenuItem x:Name="ThemeMenuItem"
+                                              Header="Switch to light"
+                                              Click="ThemeToggle_Click"/>
+                                </ContextMenu>
+                            </Button.ContextMenu>
                         </Button>
-                        <!-- Vault current thought + start fresh -->
-                        <Button Click="VaultButton_Click"
-                                Style="{StaticResource TitleBarButton}"
-                                ToolTip="Vault this thought and start a fresh pad (/vault)">
-                            <TextBlock Text="⬇ Vault"/>
-                        </Button>
-                        <!-- Browse vaulted thoughts -->
-                        <Button Click="BrowseButton_Click"
-                                Style="{StaticResource TitleBarButton}"
-                                ToolTip="Browse the thought vault">
-                            <TextBlock Text="☰ Vault Browser"/>
-                        </Button>
-                        <!-- Open vault folder in Explorer -->
-                        <Button Click="OpenFolderButton_Click"
-                                Style="{StaticResource TitleBarButton}"
-                                ToolTip="Open the vault folder">
-                            <TextBlock Text="⤤"/>
-                        </Button>
-                        <!-- Light/Dark toggle -->
-                        <Button x:Name="ThemeToggle"
-                                Click="ThemeToggle_Click"
-                                Style="{StaticResource TitleBarButton}"
-                                ToolTip="Toggle light/dark theme">
-                            <TextBlock x:Name="ThemeToggleGlyph"
-                                       Text="&#xE706;"
-                                       FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                       FontSize="13"/>
-                        </Button>
-                        <!-- Close button -->
                         <Button Click="CloseButton_Click"
                                 Background="Transparent"
                                 BorderThickness="0"
@@ -290,49 +306,8 @@
                 </Grid>
             </Border>
 
-            <!-- Formatting toolbar -->
-            <Border Grid.Row="1"
-                    Background="{DynamicResource ChromeBackgroundBrush}"
-                    BorderBrush="{DynamicResource BorderSubtleBrush}"
-                    BorderThickness="0,1,0,1"
-                    Padding="10,5">
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button Style="{StaticResource ToolbarButton}" Click="Bold_Click" ToolTip="Bold (Ctrl+B)">
-                        <TextBlock Text="B" FontWeight="Bold"/>
-                    </Button>
-                    <Button Style="{StaticResource ToolbarButton}" Click="Italic_Click" ToolTip="Italic (Ctrl+I)">
-                        <TextBlock Text="I" FontStyle="Italic"/>
-                    </Button>
-
-                    <Border Width="1" Margin="6,2" Background="{DynamicResource BorderBrush}"/>
-
-                    <TextBlock Text="Highlight"
-                               Foreground="{DynamicResource TextDimBrush}"
-                               FontFamily="Segoe UI" FontSize="11"
-                               VerticalAlignment="Center" Margin="2,0,4,0"/>
-                    <Button Style="{StaticResource Swatch}" Click="Highlight_Click" Tag="#FFF59D"
-                            Background="#FFF59D" ToolTip="Yellow"/>
-                    <Button Style="{StaticResource Swatch}" Click="Highlight_Click" Tag="#C8E6C9"
-                            Background="#C8E6C9" ToolTip="Green"/>
-                    <Button Style="{StaticResource Swatch}" Click="Highlight_Click" Tag="#BBDEFB"
-                            Background="#BBDEFB" ToolTip="Blue"/>
-                    <Button Style="{StaticResource Swatch}" Click="Highlight_Click" Tag="#F8BBD0"
-                            Background="#F8BBD0" ToolTip="Pink"/>
-                    <Button Style="{StaticResource ToolbarButton}" Click="ClearHighlight_Click"
-                            ToolTip="Remove highlight" Margin="4,0,0,0">
-                        <TextBlock Text="✕" FontSize="11"/>
-                    </Button>
-
-                    <Border Width="1" Margin="6,2" Background="{DynamicResource BorderBrush}"/>
-
-                    <Button Style="{StaticResource ToolbarButton}" Click="Task_Click" ToolTip="Toggle checkbox / task line">
-                        <TextBlock Text="☑ Task" FontSize="12"/>
-                    </Button>
-                </StackPanel>
-            </Border>
-
             <!-- Note content -->
-            <RichTextBox Grid.Row="2"
+            <RichTextBox Grid.Row="1"
                          x:Name="RichEditor"
                          AcceptsReturn="True"
                          AcceptsTab="True"
@@ -340,20 +315,82 @@
                          Foreground="{DynamicResource TextPrimaryBrush}"
                          CaretBrush="{DynamicResource CaretBrush}"
                          BorderThickness="0"
-                         Padding="16,12"
+                         Padding="20,16"
                          FontFamily="Segoe UI"
                          FontSize="{Binding EditorFontSize}"
                          VerticalScrollBarVisibility="Auto"
                          HorizontalScrollBarVisibility="Disabled"
                          SpellCheck.IsEnabled="True"
-                         TextChanged="RichEditor_TextChanged">
+                         TextChanged="RichEditor_TextChanged"
+                         SelectionChanged="RichEditor_SelectionChanged">
                 <RichTextBox.Resources>
                     <Style TargetType="ScrollBar" BasedOn="{StaticResource DarkScrollBar}"/>
                     <Style TargetType="Paragraph">
                         <Setter Property="Margin" Value="0"/>
                     </Style>
                 </RichTextBox.Resources>
+                <RichTextBox.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="Bold"   InputGestureText="Ctrl+B" Click="Bold_Click"/>
+                        <MenuItem Header="Italic" InputGestureText="Ctrl+I" Click="Italic_Click"/>
+                        <MenuItem Header="Highlight">
+                            <MenuItem Header="Yellow" Click="Highlight_Click" Tag="#FFF59D"/>
+                            <MenuItem Header="Green"  Click="Highlight_Click" Tag="#C8E6C9"/>
+                            <MenuItem Header="Blue"   Click="Highlight_Click" Tag="#BBDEFB"/>
+                            <MenuItem Header="Pink"   Click="Highlight_Click" Tag="#F8BBD0"/>
+                            <Separator/>
+                            <MenuItem Header="Remove highlight" Click="ClearHighlight_Click"/>
+                        </MenuItem>
+                        <MenuItem Header="Toggle task" Click="Task_Click"/>
+                        <Separator/>
+                        <MenuItem Command="ApplicationCommands.Cut"/>
+                        <MenuItem Command="ApplicationCommands.Copy"/>
+                        <MenuItem Command="ApplicationCommands.Paste"/>
+                    </ContextMenu>
+                </RichTextBox.ContextMenu>
             </RichTextBox>
+
+            <!-- Floating selection toolbar (positioned on selection in code-behind) -->
+            <Popup x:Name="SelectionToolbar"
+                   Placement="Absolute"
+                   AllowsTransparency="True"
+                   StaysOpen="True"
+                   PopupAnimation="Fade">
+                <Border Background="{DynamicResource ChromeBackgroundBrush}"
+                        BorderBrush="{DynamicResource BorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        Padding="4,3">
+                    <Border.Effect>
+                        <DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.45" Color="#000000"/>
+                    </Border.Effect>
+                    <StackPanel Orientation="Horizontal">
+                        <Button Style="{StaticResource PopupToolButton}" Click="Bold_Click" ToolTip="Bold (Ctrl+B)">
+                            <TextBlock Text="B" FontWeight="Bold"/>
+                        </Button>
+                        <Button Style="{StaticResource PopupToolButton}" Click="Italic_Click" ToolTip="Italic (Ctrl+I)">
+                            <TextBlock Text="I" FontStyle="Italic"/>
+                        </Button>
+                        <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}"/>
+                        <Button Style="{StaticResource PopupSwatch}" Click="Highlight_Click" Tag="#FFF59D"
+                                Background="#FFF59D" ToolTip="Yellow"/>
+                        <Button Style="{StaticResource PopupSwatch}" Click="Highlight_Click" Tag="#C8E6C9"
+                                Background="#C8E6C9" ToolTip="Green"/>
+                        <Button Style="{StaticResource PopupSwatch}" Click="Highlight_Click" Tag="#BBDEFB"
+                                Background="#BBDEFB" ToolTip="Blue"/>
+                        <Button Style="{StaticResource PopupSwatch}" Click="Highlight_Click" Tag="#F8BBD0"
+                                Background="#F8BBD0" ToolTip="Pink"/>
+                        <Button Style="{StaticResource PopupToolButton}" Click="ClearHighlight_Click"
+                                ToolTip="Remove highlight" Margin="4,0,0,0">
+                            <TextBlock Text="✕" FontSize="11"/>
+                        </Button>
+                        <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}"/>
+                        <Button Style="{StaticResource PopupToolButton}" Click="Task_Click" ToolTip="Toggle task (checkbox)">
+                            <TextBlock Text="☑" FontSize="13"/>
+                        </Button>
+                    </StackPanel>
+                </Border>
+            </Popup>
         </Grid>
     </Border>
 </Window>
