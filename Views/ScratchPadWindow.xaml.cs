@@ -16,6 +16,9 @@ using Color = System.Windows.Media.Color;
 using Brush = System.Windows.Media.Brush;
 using Brushes = System.Windows.Media.Brushes;
 using ColorConverter = System.Windows.Media.ColorConverter;
+using Point = System.Windows.Point;
+using Button = System.Windows.Controls.Button;
+using CheckBox = System.Windows.Controls.CheckBox;
 
 namespace Effortless.Views;
 
