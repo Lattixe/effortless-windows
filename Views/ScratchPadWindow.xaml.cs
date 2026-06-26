@@ -390,20 +390,14 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
         if (RichEditor.CaretPosition?.Paragraph is not { } para)
             return;
 
-        if (MarkdownFlow.TryGetTaskGlyph(para, out var glyph, out _))
+        try
         {
-            // Remove the leading glyph and clear any strike-through → plain line.
-            MarkdownFlow.SetTaskCompletedVisual(para, false);
-            para.Inlines.Remove(glyph);
-        }
-        else
-        {
-            var glyphRun = MarkdownFlow.MakeTaskGlyphRun(false);
-            if (para.Inlines.FirstInline is { } first)
-                para.Inlines.InsertBefore(first, glyphRun);
+            if (MarkdownFlow.TryGetTaskGlyph(para, out _, out _))
+                MarkdownFlow.RemoveTaskGlyph(para);
             else
-                para.Inlines.Add(glyphRun);
+                MarkdownFlow.AddTaskGlyph(para);
         }
+        catch { /* never crash on a formatting toggle */ }
 
         RichEditor.Focus();
         SaveNow();
@@ -559,49 +553,63 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
     /// <summary>Typing a space after a lone leading "-"/"*" converts the line to a task.</summary>
     private bool TryConvertDashToTask()
     {
-        if (RichEditor.CaretPosition is not { } caret) return false;
-        if (caret.Paragraph is not { } para) return false;
-        if (MarkdownFlow.TryGetTaskGlyph(para, out _, out _)) return false; // already a task
+        try
+        {
+            if (RichEditor.CaretPosition is not { } caret) return false;
+            if (caret.Paragraph is not { } para) return false;
+            if (MarkdownFlow.TryGetTaskGlyph(para, out _, out _)) return false; // already a task
 
-        var before = new TextRange(para.ContentStart, caret).Text.TrimStart();
-        if (before != "-" && before != "*") return false;
+            var before = new TextRange(para.ContentStart, caret).Text.TrimStart();
+            if (before != "-" && before != "*") return false;
 
-        var after = new TextRange(caret, para.ContentEnd).Text;
-        para.Inlines.Clear();
-        para.Inlines.Add(MarkdownFlow.MakeTaskGlyphRun(false));
-        if (after.Length > 0)
-            para.Inlines.Add(new Run(after));
-        RichEditor.CaretPosition = para.ContentEnd;
-        SaveNow();
-        return true;
+            var after = new TextRange(caret, para.ContentEnd).Text;
+            para.Inlines.Clear();
+            para.Inlines.Add(MarkdownFlow.MakeTaskGlyphRun(false));
+            if (after.Length > 0)
+                para.Inlines.Add(new Run(after));
+            RichEditor.CaretPosition = para.ContentEnd;
+            SaveNow();
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     /// <summary>Enter inside a task line continues the list; on an empty task it exits.</summary>
     private bool TryContinueTaskList()
     {
-        if (RichEditor.CaretPosition?.Paragraph is not { } para) return false;
-        if (!MarkdownFlow.TryGetTaskGlyph(para, out var glyph, out _)) return false;
-
-        var text = string.Empty;
-        foreach (var inl in para.Inlines)
-            if (inl is Run r && !ReferenceEquals(r, glyph)) text += r.Text;
-
-        if (string.IsNullOrWhiteSpace(text))
+        try
         {
-            // Empty task + Enter → drop the glyph, leave a plain line.
-            MarkdownFlow.SetTaskCompletedVisual(para, false);
-            para.Inlines.Remove(glyph);
-            RichEditor.CaretPosition = para.ContentStart;
+            if (RichEditor.CaretPosition?.Paragraph is not { } para) return false;
+            if (!MarkdownFlow.TryGetTaskGlyph(para, out _, out _)) return false;
+
+            // Content = the line's text minus the leading glyph (structure-agnostic,
+            // so it's correct even if WPF merged the copy into the glyph's run).
+            var line = new TextRange(para.ContentStart, para.ContentEnd).Text;
+            var content = MarkdownFlow.StripGlyphPrefix(line);
+
+            if (string.IsNullOrWhiteSpace(content))
+            {
+                // Empty task + Enter → exit the list (plain line).
+                MarkdownFlow.RemoveTaskGlyph(para);
+                RichEditor.CaretPosition = para.ContentStart;
+                SaveNow();
+                return true;
+            }
+
+            var next = new Paragraph { Margin = new Thickness(0) };
+            next.Inlines.Add(MarkdownFlow.MakeTaskGlyphRun(false));
+            RichEditor.Document.Blocks.InsertAfter(para, next);
+            RichEditor.CaretPosition = next.ContentEnd;
             SaveNow();
             return true;
         }
-
-        var next = new Paragraph { Margin = new Thickness(0) };
-        next.Inlines.Add(MarkdownFlow.MakeTaskGlyphRun(false));
-        RichEditor.Document.Blocks.InsertAfter(para, next);
-        RichEditor.CaretPosition = next.ContentEnd;
-        SaveNow();
-        return true;
+        catch
+        {
+            return false; // fall back to the editor's default newline
+        }
     }
 
     /// <summary>

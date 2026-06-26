@@ -27,8 +27,23 @@ internal static class MarkdownFlow
 {
     public const string UncheckedGlyph = "☐"; // ☐
     public const string CheckedGlyph = "☑";   // ☑
+    private const char UncheckedChar = '☐';
+    private const char CheckedChar = '☑';
     private const string TaskTag = "taskglyph";
     private static readonly FontFamily SymbolFont = new("Segoe UI Symbol");
+
+    private static bool IsGlyphChar(char c) => c == UncheckedChar || c == CheckedChar;
+
+    /// <summary>Strip a leading ☐/☑ glyph (and the following space) from a line.</summary>
+    public static string StripGlyphPrefix(string s)
+    {
+        if (s.Length > 0 && IsGlyphChar(s[0]))
+        {
+            s = s[1..];
+            if (s.StartsWith(' ')) s = s[1..];
+        }
+        return s;
+    }
 
     public static readonly (string Name, Color Color)[] Highlights =
     {
@@ -93,39 +108,53 @@ internal static class MarkdownFlow
             FontFamily = SymbolFont
         };
 
+    // A task line is identified by its FIRST RUN starting with a ☐/☑ glyph
+    // character — NOT by a Tag — so it survives WPF merging/splitting the runs
+    // as the user types.
     public static bool TryGetTaskGlyph(Paragraph p, out Run glyph, out bool isChecked)
     {
         glyph = null!;
         isChecked = false;
-        if (p.Inlines.FirstInline is Run r && (r.Tag as string) == TaskTag)
+        if (p.Inlines.FirstInline is Run r && r.Text.Length > 0 && IsGlyphChar(r.Text[0]))
         {
             glyph = r;
-            isChecked = r.Text.StartsWith(CheckedGlyph, StringComparison.Ordinal);
+            isChecked = r.Text[0] == CheckedChar;
             return true;
         }
         return false;
     }
 
     /// <summary>
-    /// Mark a task line done/undone: swap the glyph, strike through the text,
-    /// and gray it out to fade it down the list. Unchecking restores the
-    /// strikethrough and theme foreground (highlighted spans keep their color).
+    /// Mark a task line done/undone: flip the leading glyph, strike through the
+    /// copy, and gray it to fade it down the list. Unchecking restores the
+    /// theme foreground (highlighted spans keep their color).
     /// </summary>
     public static void SetTaskCompletedVisual(Paragraph p, bool done)
     {
+        var firstInline = p.Inlines.FirstInline;
         foreach (var inline in p.Inlines)
         {
             if (inline is not Run r) continue;
 
-            var isGlyph = (r.Tag as string) == TaskTag;
-            if (isGlyph)
-                r.Text = (done ? CheckedGlyph : UncheckedGlyph) + " ";
-            else
-                r.TextDecorations = done ? TextDecorations.Strikethrough : null;
+            var isFirst = ReferenceEquals(r, firstInline);
+            var hasGlyph = isFirst && r.Text.Length > 0 && IsGlyphChar(r.Text[0]);
 
-            // Fade the glyph and plain text; leave highlighted spans untouched.
+            if (hasGlyph)
+            {
+                // Flip ONLY the leading glyph char; preserve any copy that WPF
+                // may have merged into this same run.
+                r.Text = (done ? CheckedGlyph : UncheckedGlyph) + r.Text[1..];
+                // Strike the first run only if it carries copy (not glyph+space).
+                r.TextDecorations = (done && r.Text.Length > 2) ? TextDecorations.Strikethrough : null;
+            }
+            else
+            {
+                r.TextDecorations = done ? TextDecorations.Strikethrough : null;
+            }
+
+            // Fade glyph + plain text; leave highlighted spans their own color.
             var highlighted = r.Background is SolidColorBrush scb && scb.Color.A != 0;
-            if (isGlyph || !highlighted)
+            if (!highlighted)
             {
                 if (done)
                     r.Foreground = CompletedForegroundBrush;
@@ -133,6 +162,29 @@ internal static class MarkdownFlow
                     r.ClearValue(TextElement.ForegroundProperty);
             }
         }
+    }
+
+    /// <summary>Insert a leading ☐ glyph, making the paragraph a task.</summary>
+    public static void AddTaskGlyph(Paragraph p)
+    {
+        var g = MakeTaskGlyphRun(false);
+        if (p.Inlines.FirstInline is { } first)
+            p.Inlines.InsertBefore(first, g);
+        else
+            p.Inlines.Add(g);
+    }
+
+    /// <summary>Remove the leading glyph (and its space), making it a plain line.</summary>
+    public static void RemoveTaskGlyph(Paragraph p)
+    {
+        if (!TryGetTaskGlyph(p, out var r, out _)) return;
+        SetTaskCompletedVisual(p, false); // clear any strike/fade first
+        var t = r.Text[1..];
+        if (t.StartsWith(' ')) t = t[1..];
+        if (t.Length == 0)
+            p.Inlines.Remove(r);
+        else
+            r.Text = t;
     }
 
     private static List<Run> ParseInlines(string text)
@@ -275,13 +327,19 @@ internal static class MarkdownFlow
         var inlines = p.Inlines.ToList();
         int start = 0;
 
-        if (inlines.Count > 0 && inlines[0] is Run g && (g.Tag as string) == TaskTag)
+        var tokens = new List<(string text, bool bold, bool italic, Brush? bg)>();
+
+        if (inlines.Count > 0 && inlines[0] is Run g && g.Text.Length > 0 && IsGlyphChar(g.Text[0]))
         {
-            sb.Append(g.Text.StartsWith(CheckedGlyph, StringComparison.Ordinal) ? "- [x] " : "- [ ] ");
+            sb.Append(g.Text[0] == CheckedChar ? "- [x] " : "- [ ] ");
+            // Any copy merged into the glyph run keeps the glyph run's formatting.
+            var rest = g.Text[1..];
+            if (rest.StartsWith(' ')) rest = rest[1..];
+            if (rest.Length > 0)
+                tokens.Add((rest, IsBold(g), IsItalic(g), HighlightOf(g)));
             start = 1;
         }
 
-        var tokens = new List<(string text, bool bold, bool italic, Brush? bg)>();
         for (int k = start; k < inlines.Count; k++)
         {
             if (inlines[k] is Run run)
