@@ -42,6 +42,9 @@ internal static class MarkdownFlow
     public static readonly Color HighlightForeground = HexColor("#1A1A1A");
     public static readonly Brush HighlightForegroundBrush = Frozen(HighlightForeground);
 
+    // Muted gray for completed tasks — reads as "faded" on both light and dark.
+    public static readonly Brush CompletedForegroundBrush = Frozen(HexColor("#8A8A8A"));
+
     private static Color HexColor(string hex) => (Color)ColorConverter.ConvertFromString(hex)!;
     private static SolidColorBrush Frozen(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
 
@@ -103,16 +106,32 @@ internal static class MarkdownFlow
         return false;
     }
 
-    /// <summary>Set/clear the checked glyph and strike-through on a task line.</summary>
+    /// <summary>
+    /// Mark a task line done/undone: swap the glyph, strike through the text,
+    /// and gray it out to fade it down the list. Unchecking restores the
+    /// strikethrough and theme foreground (highlighted spans keep their color).
+    /// </summary>
     public static void SetTaskCompletedVisual(Paragraph p, bool done)
     {
         foreach (var inline in p.Inlines)
         {
             if (inline is not Run r) continue;
-            if ((r.Tag as string) == TaskTag)
+
+            var isGlyph = (r.Tag as string) == TaskTag;
+            if (isGlyph)
                 r.Text = (done ? CheckedGlyph : UncheckedGlyph) + " ";
             else
                 r.TextDecorations = done ? TextDecorations.Strikethrough : null;
+
+            // Fade the glyph and plain text; leave highlighted spans untouched.
+            var highlighted = r.Background is SolidColorBrush scb && scb.Color.A != 0;
+            if (isGlyph || !highlighted)
+            {
+                if (done)
+                    r.Foreground = CompletedForegroundBrush;
+                else
+                    r.ClearValue(TextElement.ForegroundProperty);
+            }
         }
     }
 
