@@ -12,6 +12,7 @@ $InstallDir = Join-Path $env:LOCALAPPDATA "Effortless"
 $ExePath = Join-Path $InstallDir "Effortless.exe"
 $StartMenuPath = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Effortless.lnk"
 $StartupPath = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Startup\Effortless.lnk"
+$DesktopPath = Join-Path ([Environment]::GetFolderPath('Desktop')) "Effortless.lnk"
 
 # Check if publish folder exists
 if (-not (Test-Path $PublishDir)) {
@@ -42,12 +43,18 @@ function Create-Shortcut {
     $Shortcut.TargetPath = $TargetPath
     $Shortcut.WorkingDirectory = Split-Path $TargetPath
     $Shortcut.Description = $Description
+    # Use the app's embedded icon (from app.ico via <ApplicationIcon>)
+    $Shortcut.IconLocation = "$TargetPath,0"
     $Shortcut.Save()
 }
 
 # Create Start Menu shortcut
 Write-Host "Creating Start Menu shortcut..." -ForegroundColor Gray
 Create-Shortcut -ShortcutPath $StartMenuPath -TargetPath $ExePath -Description "Effortless - Minimalist Task Timer"
+
+# Create Desktop shortcut (double-click icon to launch)
+Write-Host "Creating Desktop shortcut..." -ForegroundColor Gray
+Create-Shortcut -ShortcutPath $DesktopPath -TargetPath $ExePath -Description "Effortless - Minimalist Task Timer"
 
 # Create Startup shortcut (run on startup)
 Write-Host "Adding to Windows startup..." -ForegroundColor Gray
@@ -57,8 +64,11 @@ Write-Host ""
 Write-Host "Installation complete!" -ForegroundColor Green
 Write-Host ""
 Write-Host "Effortless has been installed to: $InstallDir" -ForegroundColor White
+Write-Host "Desktop shortcut created - double-click 'Effortless' on your desktop" -ForegroundColor White
 Write-Host "Start Menu shortcut created - search for 'Effortless' in Start" -ForegroundColor White
 Write-Host "Startup shortcut created - Effortless will run on Windows startup" -ForegroundColor White
+Write-Host ""
+Write-Host "To update to the latest version later, re-run install-latest.ps1." -ForegroundColor Gray
 Write-Host ""
 Write-Host "Starting Effortless now..." -ForegroundColor Cyan
 
