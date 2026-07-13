@@ -267,6 +267,10 @@
                                     <MenuItem Header="☰ Vault Browser" Click="BrowseButton_Click"/>
                                     <MenuItem Header="⤤ Open Folder"   Click="OpenFolderButton_Click"/>
                                     <Separator/>
+                                    <MenuItem x:Name="SpellCheckMenuItem"
+                                              Header="Spell check"
+                                              IsCheckable="True"
+                                              Click="SpellCheck_Click"/>
                                     <MenuItem x:Name="ThemeMenuItem"
                                               Header="Switch to light"
                                               Click="ThemeToggle_Click"/>
@@ -320,9 +324,9 @@
                          FontSize="{Binding EditorFontSize}"
                          VerticalScrollBarVisibility="Auto"
                          HorizontalScrollBarVisibility="Disabled"
-                         SpellCheck.IsEnabled="True"
                          TextChanged="RichEditor_TextChanged"
-                         SelectionChanged="RichEditor_SelectionChanged">
+                         SelectionChanged="RichEditor_SelectionChanged"
+                         ContextMenuOpening="RichEditor_ContextMenuOpening">
                 <RichTextBox.Resources>
                     <Style TargetType="ScrollBar" BasedOn="{StaticResource DarkScrollBar}"/>
                     <Style TargetType="Paragraph">

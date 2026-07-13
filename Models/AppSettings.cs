@@ -8,6 +8,9 @@ public class AppSettings
     /// <summary>True for dark theme (the original "lights out" look), false for light.</summary>
     public bool IsDarkMode { get; set; } = true;
 
+    /// <summary>Scratch-pad spell check (red squiggles). Off by default — distracting for quick notes.</summary>
+    public bool SpellCheckEnabled { get; set; } = false;
+
     // -------- Ask providers --------
     // Each provider's Command must resolve on PATH (or be a full path / "wsl <cmd>"
     // form). Set the Command to "" to hide a provider from the Ask switcher.

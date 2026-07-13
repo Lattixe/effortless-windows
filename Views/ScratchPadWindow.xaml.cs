@@ -18,6 +18,7 @@ using Brushes = System.Windows.Media.Brushes;
 using ColorConverter = System.Windows.Media.ColorConverter;
 using Point = System.Windows.Point;
 using Button = System.Windows.Controls.Button;
+using MenuItem = System.Windows.Controls.MenuItem;
 
 namespace Effortless.Views;
 
@@ -67,6 +68,9 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
             new MouseButtonEventHandler(RichEditor_PreviewMouseDown),
             handledEventsToo: true);
 
+        // Spell check off by default (the red squiggles distract from quick notes).
+        RichEditor.SpellCheck.IsEnabled = StorageService.LoadSettings().SpellCheckEnabled;
+
         // Load saved note into the rich editor.
         var markdown = StorageService.LoadScratchPad();
         SetMarkdown(markdown);
@@ -82,6 +86,7 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
         {
             RichEditor.Focus();
             UpdateThemeMenu();
+            SpellCheckMenuItem.IsChecked = RichEditor.SpellCheck.IsEnabled;
             TitleDisplay.Text = ComputeTitle();
         };
 
@@ -180,6 +185,72 @@ public partial class ScratchPadWindow : System.Windows.Window, INotifyPropertyCh
     {
         ThemeService.Toggle();
         ShowStatus(ThemeService.IsDark ? "Dark mode" : "Light mode");
+    }
+
+    // ----------------------------------------------------- spell check
+
+    private void SpellCheck_Click(object sender, RoutedEventArgs e)
+    {
+        var on = SpellCheckMenuItem.IsChecked;   // IsCheckable flips it before Click
+        RichEditor.SpellCheck.IsEnabled = on;
+
+        var settings = StorageService.LoadSettings();
+        settings.SpellCheckEnabled = on;
+        StorageService.SaveSettings(settings);
+
+        ShowStatus(on ? "Spell check on" : "Spell check off");
+        RichEditor.Focus();
+    }
+
+    // When spell check is on, our custom context menu replaces the built-in one,
+    // so inject the spelling suggestions / "Ignore All" for the right-clicked word.
+    private void RichEditor_ContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        var menu = RichEditor.ContextMenu;
+        if (menu == null) return;
+
+        // Clear any suggestions injected on a previous open.
+        for (int i = menu.Items.Count - 1; i >= 0; i--)
+            if (menu.Items[i] is FrameworkElement { Tag: "spell" })
+                menu.Items.RemoveAt(i);
+
+        if (!RichEditor.SpellCheck.IsEnabled)
+            return;
+
+        try
+        {
+            // Locate the word under the cursor (fall back to the caret).
+            TextPointer? pos = null;
+            if (e.CursorLeft >= 0 && e.CursorTop >= 0)
+                pos = RichEditor.GetPositionFromPoint(new Point(e.CursorLeft, e.CursorTop), true);
+            pos ??= RichEditor.CaretPosition;
+            if (pos == null) return;
+
+            var error = RichEditor.GetSpellingError(pos);
+            if (error == null) return;
+
+            int idx = 0;
+            var hadSuggestion = false;
+            foreach (var suggestion in error.Suggestions)
+            {
+                var text = suggestion;
+                var item = new MenuItem { Header = text, FontWeight = FontWeights.SemiBold, Tag = "spell" };
+                item.Click += (_, _) => { error.Correct(text); SaveNow(); };
+                menu.Items.Insert(idx++, item);
+                hadSuggestion = true;
+            }
+            if (!hadSuggestion)
+                menu.Items.Insert(idx++, new MenuItem { Header = "(No suggestions)", IsEnabled = false, Tag = "spell" });
+
+            var ignore = new MenuItem { Header = "Ignore", Tag = "spell" };
+            ignore.Click += (_, _) => { error.IgnoreAll(); SaveNow(); };
+            menu.Items.Insert(idx++, ignore);
+            menu.Items.Insert(idx, new Separator { Tag = "spell" });
+        }
+        catch
+        {
+            // Never let building the menu crash a right-click.
+        }
     }
 
     // ----------------------------------------------------- title (Google-Docs style)
